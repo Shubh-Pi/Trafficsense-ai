@@ -402,18 +402,26 @@ class TrafficSignNet(nn.Module):
 
 @st.cache_resource
 def load_model():
-    model = TrafficSignNet(NUM_CLASSES)
     try:
-        state = torch.load("traffic_sign_model_full.pth", map_location=DEVICE)
-        if isinstance(state, dict):
-            model.load_state_dict(state)
+        obj = torch.load("traffic_sign_model_full.pth", map_location=DEVICE)
+        if isinstance(obj, dict):
+            model = TrafficSignNet(NUM_CLASSES)
+            model.load_state_dict(obj)
+        elif isinstance(obj, nn.Module):
+            model = obj
         else:
-            model = state
+            raise ValueError(f"Unknown type: {type(obj)}")
         model.eval()
         return model, True
-    except Exception as e:
-        st.error(f"Model load error: {e}")
-        return None, False
+    except Exception as e1:
+        try:
+            model = TrafficSignNet(NUM_CLASSES)
+            state = torch.load("traffic_sign_model.pth", map_location=DEVICE)
+            model.load_state_dict(state)
+            model.eval()
+            return model, True
+        except Exception as e2:
+            return None, False
 
 
 @st.cache_data
