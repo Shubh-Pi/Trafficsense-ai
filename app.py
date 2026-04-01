@@ -733,7 +733,7 @@ if st.session_state.active_tab == 0:
 
         if uploaded:
             img_pil = Image.open(uploaded).convert("RGB")
-            st.image(img_pil, use_column_width=True, caption="Uploaded image")
+            st.image(img_pil, use_container_width=True, caption="Uploaded image")
 
             if model_ok:
                 with st.spinner("Classifying..."):
@@ -777,7 +777,7 @@ if st.session_state.active_tab == 0:
             try:
                 heatmap = compute_gradcam(model, img_pil)
                 gcam_buf = make_gradcam_figure(img_pil, heatmap)
-                st.image(gcam_buf, use_column_width=True)
+                st.image(gcam_buf, use_container_width=True)
                 bg = "#13161f" if dark else "#f8fafc"
                 tc = "#64748b"
                 st.markdown(f"""
@@ -1063,17 +1063,17 @@ elif st.session_state.active_tab == 2:
             ("Stop", 100), ("No vehicles", 99), ("Yield", 99),
             ("Priority road", 97), ("No passing (>3.5t)", 99),
         ]
+        bar_bg_color = "#13161f" if dark else "#f8fafc"
         rows = ""
         for name_c, acc_c in top_classes:
-            rows += f"""
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">
-              <span style="font-size:12px;color:{tc};width:160px;">{name_c}</span>
-              <div style="flex:1;height:18px;background:{'#13161f' if dark else '#f8fafc'};border-radius:4px;overflow:hidden;">
-                <div style="width:{acc_c}%;height:18px;background:#1d9e75;border-radius:4px;display:flex;align-items:center;padding-left:6px;">
-                  <span style="font-size:10px;color:white;">{acc_c}%</span>
-                </div>
-              </div>
-            </div>"""
+            rows += (
+                f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">'
+                f'<span style="font-size:12px;color:{tc};width:160px;">{name_c}</span>'
+                f'<div style="flex:1;height:18px;background:{bar_bg_color};border-radius:4px;overflow:hidden;">'
+                f'<div style="width:{acc_c}%;height:18px;background:#1d9e75;border-radius:4px;display:flex;align-items:center;padding-left:6px;">'
+                f'<span style="font-size:10px;color:white;">{acc_c}%</span>'
+                f'</div></div></div>'
+            )
         st.markdown(f'<div style="background:{bg};border:1px solid {bd};border-radius:12px;padding:14px 16px;">{rows}</div>', unsafe_allow_html=True)
 
     with col_right:
@@ -1102,15 +1102,14 @@ elif st.session_state.active_tab == 2:
         ]
         rows = ""
         for name_c, acc_c, col_c in hard_classes:
-            rows += f"""
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">
-              <span style="font-size:12px;color:{tc};width:160px;">{name_c}</span>
-              <div style="flex:1;height:18px;background:{'#13161f' if dark else '#f8fafc'};border-radius:4px;overflow:hidden;">
-                <div style="width:{acc_c}%;height:18px;background:{col_c};border-radius:4px;display:flex;align-items:center;padding-left:6px;">
-                  <span style="font-size:10px;color:white;">{acc_c}%</span>
-                </div>
-              </div>
-            </div>"""
+            rows += (
+                f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">'
+                f'<span style="font-size:12px;color:{tc};width:160px;">{name_c}</span>'
+                f'<div style="flex:1;height:18px;background:{bar_bg_color};border-radius:4px;overflow:hidden;">'
+                f'<div style="width:{acc_c}%;height:18px;background:{col_c};border-radius:4px;display:flex;align-items:center;padding-left:6px;">'
+                f'<span style="font-size:10px;color:white;">{acc_c}%</span>'
+                f'</div></div></div>'
+            )
         hint_col = "#475569" if dark else "#94a3b8"
         st.markdown(f"""
         <div style="background:{bg};border:1px solid {bd};border-radius:12px;padding:14px 16px;">
