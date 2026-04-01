@@ -555,38 +555,31 @@ def load_model():
         print(f"[TrafficSense] Trying model file: {pth_path}")
         try:
             obj = torch.load(pth_path, map_location=DEVICE, weights_only=False)
+            state = obj if isinstance(obj, dict) else obj.state_dict()
 
-            # Case 1: it's already a state dict
-            if isinstance(obj, dict):
-                # Try strict first, then relaxed
-                try:
-                    model.load_state_dict(obj, strict=True)
-                except Exception:
-                    # Extract only matching keys (handles minor architecture diffs)
-                    own_state = model.state_dict()
-                    filtered = {k: v for k, v in obj.items() if k in own_state and own_state[k].shape == v.shape}
-                    own_state.update(filtered)
-                    model.load_state_dict(own_state)
-                model.eval()
-                return model, True
+            # Load weights and measure coverage — fail loudly if too few keys match
+            missing, unexpected = model.load_state_dict(state, strict=False)
+            own_keys    = set(model.state_dict().keys())
+            loaded_keys = own_keys - set(missing)
+            coverage    = len(loaded_keys) / len(own_keys)
 
-            # Case 2: full model object saved with torch.save(model)
-            elif hasattr(obj, 'state_dict'):
-                saved_state = obj.state_dict()
-                try:
-                    model.load_state_dict(saved_state, strict=True)
-                except Exception:
-                    own_state = model.state_dict()
-                    filtered = {k: v for k, v in saved_state.items() if k in own_state and own_state[k].shape == v.shape}
-                    own_state.update(filtered)
-                    model.load_state_dict(own_state)
-                model.eval()
-                return model, True
+            print(f"[TrafficSense] Weight coverage: {coverage:.1%} ({len(loaded_keys)}/{len(own_keys)} keys)")
+            print(f"[TrafficSense] Missing: {len(missing)}, Unexpected: {len(unexpected)}")
 
-        except Exception:
+            if coverage < 0.85:
+                print(f"[TrafficSense] ❌ Only {coverage:.1%} weights loaded — skipping {pth_path}")
+                continue  # try next file instead of silently using bad weights
+
+            model.eval()
+            print(f"[TrafficSense] ✅ Model loaded successfully from {pth_path}")
+            return model, True
+
+        except Exception as e:
+            print(f"[TrafficSense] Error loading {pth_path}: {e}")
             continue
 
-    return None, False
+    print("[TrafficSense] ❌ No valid model file found — predictions will be random!")
+    return model, False
 
 
 @st.cache_data
@@ -625,9 +618,22 @@ val_transform = transforms.Compose([
 
 
 # ── Inference ─────────────────────────────────────────────────────────────────
+def flatten_alpha(img_pil):
+    """Replace transparent background with white — prevents checkerboard grey noise."""
+    if img_pil.mode in ("RGBA", "LA") or (img_pil.mode == "P" and "transparency" in img_pil.info):
+        bg = Image.new("RGB", img_pil.size, (255, 255, 255))
+        if img_pil.mode == "P":
+            img_pil = img_pil.convert("RGBA")
+        mask = img_pil.split()[-1] if img_pil.mode == "RGBA" else None
+        bg.paste(img_pil.convert("RGB"), mask=mask)
+        return bg
+    return img_pil.convert("RGB")
+
+
 def predict(model, img_pil):
-    t0    = time.time()
-    tensor = val_transform(img_pil.convert("RGB")).unsqueeze(0).to(DEVICE)
+    t0      = time.time()
+    img_rgb = flatten_alpha(img_pil)   # fix transparent PNG backgrounds
+    tensor  = val_transform(img_rgb).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
         logits = model(tensor)
         probs  = torch.softmax(logits, dim=1)[0]
@@ -652,7 +658,7 @@ def compute_gradcam(model, img_pil):
     fh = target.register_forward_hook(fwd)
     bh = target.register_full_backward_hook(bwd)
 
-    tensor = val_transform(img_pil.convert("RGB")).unsqueeze(0).to(DEVICE)
+    tensor = val_transform(flatten_alpha(img_pil)).unsqueeze(0).to(DEVICE)
     tensor.requires_grad_(True)
     out    = model(tensor)
     pred   = out.argmax(1).item()
@@ -670,7 +676,7 @@ def compute_gradcam(model, img_pil):
 
 
 def make_gradcam_figure(img_pil, heatmap):
-    orig = np.array(img_pil.convert("RGB").resize((IMG_SIZE, IMG_SIZE)))
+    orig = np.array(flatten_alpha(img_pil).resize((IMG_SIZE, IMG_SIZE)))
     from PIL import Image as PILImage
     hmap_resized = np.array(
         PILImage.fromarray(np.uint8(heatmap * 255)).resize((IMG_SIZE, IMG_SIZE), PILImage.BILINEAR)
@@ -801,6 +807,18 @@ try:
 except Exception as e:
     print(f"[TrafficSense] Model load error: {e}")
     model, model_ok = None, False
+
+# ── Model load diagnostic (visible in UI) ────────────────────────────────────
+if not model_ok:
+    st.error("❌ **Model weights not found or failed to load.** Predictions will be random. "
+             "Make sure `traffic_sign_model_full.pth` is in the same folder as `app.py`.")
+else:
+    total_params  = sum(p.numel() for p in model.parameters())
+    nonzero_params = sum((p != 0).sum().item() for p in model.parameters())
+    nonzero_pct   = nonzero_params / total_params * 100
+    if nonzero_pct < 70:
+        st.warning(f"⚠️ **Only {nonzero_pct:.1f}% of model weights are non-zero** — "
+                   "the .pth file may be corrupt or from a different architecture. Re-train and re-save.")
 
 try:
     labels = load_labels()
