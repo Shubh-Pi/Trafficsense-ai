@@ -31,49 +31,185 @@ STD  = [0.229, 0.224, 0.225]
 
 # ── Sign metadata ─────────────────────────────────────────────────────────────
 SIGN_INFO = {
-    "0":  {"meaning": "Maximum speed of 20km/h. Typically used in school zones and pedestrian areas.",         "action": "Reduce speed to 20km/h immediately.",                    "danger": "MANDATORY",    "color": "#e24b4a"},
-    "1":  {"meaning": "Maximum speed of 30km/h. Common in residential zones.",                                  "action": "Reduce speed to 30km/h.",                                "danger": "MANDATORY",    "color": "#e24b4a"},
-    "2":  {"meaning": "Maximum speed of 50km/h. Common in urban areas.",                                        "action": "Reduce speed to 50km/h.",                                "danger": "MANDATORY",    "color": "#e24b4a"},
-    "3":  {"meaning": "Maximum speed of 60km/h.",                                                               "action": "Reduce speed to 60km/h.",                                "danger": "MANDATORY",    "color": "#e24b4a"},
-    "4":  {"meaning": "Maximum speed of 70km/h.",                                                               "action": "Reduce speed to 70km/h.",                                "danger": "MANDATORY",    "color": "#e24b4a"},
-    "5":  {"meaning": "Maximum speed of 80km/h.",                                                               "action": "Reduce speed to 80km/h.",                                "danger": "MANDATORY",    "color": "#e24b4a"},
-    "6":  {"meaning": "The 80km/h speed limit zone has ended. Normal speed limits resume.",                     "action": "Resume normal speed as per road rules.",                 "danger": "INFO",         "color": "#1d9e75"},
-    "7":  {"meaning": "Maximum speed of 100km/h. Highway or expressway zone.",                                  "action": "Do not exceed 100km/h.",                                 "danger": "MANDATORY",    "color": "#e24b4a"},
-    "8":  {"meaning": "Maximum speed of 120km/h. Motorway zone.",                                               "action": "Do not exceed 120km/h.",                                 "danger": "MANDATORY",    "color": "#e24b4a"},
-    "9":  {"meaning": "Overtaking other vehicles is not permitted.",                                            "action": "Stay in lane. Do not attempt to overtake.",              "danger": "MANDATORY",    "color": "#e24b4a"},
-    "10": {"meaning": "Vehicles over 3.5 tonnes are not permitted to overtake.",                                "action": "Heavy vehicles must not overtake.",                      "danger": "MANDATORY",    "color": "#e24b4a"},
-    "11": {"meaning": "Vehicles at this intersection must give way to traffic on the right.",                   "action": "Prepare to yield. Scan for incoming traffic.",           "danger": "WARNING",      "color": "#EF9F27"},
-    "12": {"meaning": "You are on a priority road. Other traffic must give way to you.",                        "action": "Maintain speed. You have right of way.",                 "danger": "INFO",         "color": "#1d9e75"},
-    "13": {"meaning": "You must give way to all oncoming traffic.",                                             "action": "Slow down and yield to all traffic.",                    "danger": "WARNING",      "color": "#EF9F27"},
-    "14": {"meaning": "You must come to a complete stop before proceeding.",                                    "action": "Apply full brakes. Stop completely before proceeding.",  "danger": "MANDATORY",    "color": "#e24b4a"},
-    "15": {"meaning": "No vehicles of any kind are permitted on this road.",                                    "action": "Do not enter this road.",                                "danger": "MANDATORY",    "color": "#e24b4a"},
-    "16": {"meaning": "Vehicles over 3.5 tonnes are not allowed on this road.",                                 "action": "Heavy vehicles must find an alternative route.",         "danger": "MANDATORY",    "color": "#e24b4a"},
-    "17": {"meaning": "Entry to this road is prohibited for all vehicles.",                                     "action": "Do not enter. Turn around immediately.",                 "danger": "MANDATORY",    "color": "#e24b4a"},
-    "18": {"meaning": "General hazard ahead. Stay alert for unexpected dangers.",                               "action": "Reduce speed and stay alert.",                           "danger": "WARNING",      "color": "#EF9F27"},
-    "19": {"meaning": "Sharp curve to the left ahead.",                                                         "action": "Reduce speed before the curve. Steer left carefully.",   "danger": "WARNING",      "color": "#EF9F27"},
-    "20": {"meaning": "Sharp curve to the right ahead.",                                                        "action": "Reduce speed before the curve. Steer right carefully.",  "danger": "WARNING",      "color": "#EF9F27"},
-    "21": {"meaning": "Two consecutive sharp curves ahead.",                                                    "action": "Reduce speed significantly. Prepare for winding road.",  "danger": "WARNING",      "color": "#EF9F27"},
-    "22": {"meaning": "Uneven road surface ahead. Expect bumps.",                                               "action": "Reduce speed to avoid vehicle damage.",                  "danger": "WARNING",      "color": "#EF9F27"},
-    "23": {"meaning": "Slippery road surface ahead, especially when wet.",                                      "action": "Reduce speed. Avoid sudden braking or steering.",        "danger": "WARNING",      "color": "#EF9F27"},
-    "24": {"meaning": "The road narrows from the right side ahead.",                                            "action": "Move left and reduce speed.",                            "danger": "WARNING",      "color": "#EF9F27"},
-    "25": {"meaning": "Road construction or maintenance work ahead.",                                           "action": "Slow down and follow any temporary signs.",              "danger": "WARNING",      "color": "#EF9F27"},
-    "26": {"meaning": "Traffic signals ahead. Be prepared to stop.",                                            "action": "Reduce speed and prepare to stop at signals.",           "danger": "WARNING",      "color": "#EF9F27"},
-    "27": {"meaning": "Pedestrian crossing ahead. Watch for people crossing.",                                  "action": "Slow down and be ready to stop for pedestrians.",        "danger": "WARNING",      "color": "#EF9F27"},
-    "28": {"meaning": "Children crossing zone. School area nearby.",                                            "action": "Reduce speed sharply. Watch for children.",              "danger": "WARNING",      "color": "#EF9F27"},
-    "29": {"meaning": "Cyclists may be crossing or sharing the road ahead.",                                    "action": "Watch for cyclists. Give them space.",                   "danger": "WARNING",      "color": "#EF9F27"},
-    "30": {"meaning": "Ice or snow on road surface likely. Slippery conditions.",                               "action": "Reduce speed. Use winter driving techniques.",           "danger": "WARNING",      "color": "#EF9F27"},
-    "31": {"meaning": "Wild animals may cross the road ahead.",                                                 "action": "Reduce speed. Watch for animals crossing.",              "danger": "WARNING",      "color": "#EF9F27"},
-    "32": {"meaning": "All speed and overtaking restrictions from this point are lifted.",                      "action": "Normal driving rules resume.",                           "danger": "INFO",         "color": "#1d9e75"},
-    "33": {"meaning": "You must turn right ahead.",                                                             "action": "Prepare to turn right at the next junction.",            "danger": "MANDATORY",    "color": "#e24b4a"},
-    "34": {"meaning": "You must turn left ahead.",                                                              "action": "Prepare to turn left at the next junction.",             "danger": "MANDATORY",    "color": "#e24b4a"},
-    "35": {"meaning": "You must continue straight ahead.",                                                      "action": "Do not turn. Proceed straight only.",                    "danger": "MANDATORY",    "color": "#e24b4a"},
-    "36": {"meaning": "You may go straight or turn right.",                                                     "action": "Choose straight or right turn only.",                    "danger": "MANDATORY",    "color": "#e24b4a"},
-    "37": {"meaning": "You may go straight or turn left.",                                                      "action": "Choose straight or left turn only.",                     "danger": "MANDATORY",    "color": "#e24b4a"},
-    "38": {"meaning": "Keep to the right side of the road or obstacle.",                                        "action": "Move to the right side.",                                "danger": "MANDATORY",    "color": "#e24b4a"},
-    "39": {"meaning": "Keep to the left side of the road or obstacle.",                                         "action": "Move to the left side.",                                 "danger": "MANDATORY",    "color": "#e24b4a"},
-    "40": {"meaning": "Roundabout ahead. Traffic moves counter-clockwise.",                                     "action": "Slow down. Give way to traffic already in roundabout.",  "danger": "MANDATORY",    "color": "#e24b4a"},
-    "41": {"meaning": "The no-overtaking restriction zone has ended.",                                          "action": "Overtaking is now permitted.",                           "danger": "INFO",         "color": "#1d9e75"},
-    "42": {"meaning": "The no-overtaking restriction for vehicles over 3.5t has ended.",                        "action": "Heavy vehicles may now overtake.",                       "danger": "INFO",         "color": "#1d9e75"},
+    # ── Speed limits (MANDATORY — red circle) ─────────────────────────────────
+    "0":  {"meaning": "Speed limit of 20 km/h. Used in school zones, pedestrian areas, and narrow residential streets where very low speeds are required.",
+           "action": "Reduce speed to 20 km/h immediately and maintain it until the restriction ends.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "1":  {"meaning": "Speed limit of 30 km/h. Common in residential zones, near schools, and areas with high pedestrian activity.",
+           "action": "Reduce speed to 30 km/h. Stay alert for pedestrians and children.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "2":  {"meaning": "Speed limit of 50 km/h. Standard limit in urban built-up areas and city streets.",
+           "action": "Reduce speed to 50 km/h and maintain until the limit changes.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "3":  {"meaning": "Speed limit of 60 km/h. Applies on urban arterial roads and some rural roads.",
+           "action": "Reduce speed to 60 km/h.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "4":  {"meaning": "Speed limit of 70 km/h. Common on roads leaving urban areas or on rural approach roads.",
+           "action": "Reduce speed to 70 km/h.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "5":  {"meaning": "Speed limit of 80 km/h. Typically found on rural roads and roads outside urban areas.",
+           "action": "Reduce speed to 80 km/h.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "6":  {"meaning": "End of the 80 km/h speed restriction. The mandatory 80 km/h limit no longer applies from this point.",
+           "action": "The 80 km/h restriction has lifted. Drive at a speed appropriate for road conditions.",
+           "danger": "INFO", "color": "#1d9e75"},
+
+    "7":  {"meaning": "Speed limit of 100 km/h. Found on expressways and high-speed rural roads.",
+           "action": "Do not exceed 100 km/h. Maintain safe following distance at higher speeds.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "8":  {"meaning": "Speed limit of 120 km/h. Applies on motorways and autobahns with a set restriction.",
+           "action": "Do not exceed 120 km/h. Stay in the right lane unless overtaking.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    # ── No passing (MANDATORY) ────────────────────────────────────────────────
+    "9":  {"meaning": "Overtaking is prohibited for all motor vehicles. You may not pass the vehicle ahead.",
+           "action": "Stay in your lane. Do not attempt to overtake any vehicle until the restriction ends.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "10": {"meaning": "Vehicles exceeding 3.5 tonnes are prohibited from overtaking other motor vehicles.",
+           "action": "Heavy vehicles must remain behind slower traffic. No overtaking permitted.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    # ── Right-of-way ──────────────────────────────────────────────────────────
+    "11": {"meaning": "You have right of way at the upcoming intersection. Vehicles approaching from side roads must yield to you.",
+           "action": "Maintain speed. You have priority — cross traffic must give way to you.",
+           "danger": "INFO", "color": "#1d9e75"},
+
+    "12": {"meaning": "You are travelling on a priority road. All vehicles at junctions and side roads must yield to you until the priority road ends.",
+           "action": "Maintain speed. You have continuous right of way on this road.",
+           "danger": "INFO", "color": "#1d9e75"},
+
+    "13": {"meaning": "Yield sign. You do not have right of way. All approaching traffic on the main road has priority over you.",
+           "action": "Slow down and give way to all traffic on the main road before proceeding.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "14": {"meaning": "Stop sign. You are legally required to come to a complete standstill before the stop line, regardless of visibility.",
+           "action": "Bring vehicle to a complete stop. Check all directions for traffic before proceeding.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    # ── Prohibitory (MANDATORY) ───────────────────────────────────────────────
+    "15": {"meaning": "No vehicles permitted. This road is closed to all motor vehicles, bicycles, and other vehicles in both directions.",
+           "action": "Do not enter. Find an alternative route.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "16": {"meaning": "Vehicles exceeding 3.5 tonnes are prohibited from using this road.",
+           "action": "Heavy vehicles must use an alternative route. Passenger cars may proceed.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "17": {"meaning": "No entry. Entry is prohibited for all vehicles in this direction. This is typically a one-way road in the opposite direction.",
+           "action": "Do not enter. Turn around and use an alternative route.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    # ── Warning signs (WARNING — red triangle) ────────────────────────────────
+    "18": {"meaning": "General danger warning. An unspecified hazard lies ahead that is not covered by a specific sign.",
+           "action": "Reduce speed, increase alertness, and be prepared for unexpected hazards.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "19": {"meaning": "Dangerous left curve ahead. The road bends sharply to the left.",
+           "action": "Reduce speed before entering the curve. Do not brake mid-curve.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "20": {"meaning": "Dangerous right curve ahead. The road bends sharply to the right.",
+           "action": "Reduce speed before entering the curve. Do not brake mid-curve.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "21": {"meaning": "Double curve ahead — first curving left, then right (or vice versa). Consecutive bends require sustained attention.",
+           "action": "Reduce speed significantly. Keep to your lane through both curves.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "22": {"meaning": "Bumpy or uneven road surface ahead. Road humps, rough surface, or damaged pavement expected.",
+           "action": "Reduce speed to protect vehicle suspension and maintain control.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "23": {"meaning": "Slippery road ahead. Surface may be wet, icy, or otherwise slippery, increasing stopping distances.",
+           "action": "Reduce speed. Avoid sudden braking, acceleration, or sharp steering inputs.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "24": {"meaning": "Road narrows from the right side ahead. The carriageway becomes narrower, reducing available lane width.",
+           "action": "Move toward the centre-left. Reduce speed and watch for oncoming traffic.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "25": {"meaning": "Roadworks ahead. Construction or maintenance activity is taking place on or near the road.",
+           "action": "Reduce speed. Follow temporary signs and be alert for workers and machinery.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "26": {"meaning": "Traffic signals ahead. A traffic light controlled junction or crossing is approaching.",
+           "action": "Reduce speed and be prepared to stop at a red light.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "27": {"meaning": "Pedestrian crossing ahead. A marked crossing where pedestrians have right of way.",
+           "action": "Reduce speed and be prepared to stop for pedestrians crossing.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "28": {"meaning": "Children crossing ahead. School zone or area with high child pedestrian activity nearby.",
+           "action": "Reduce speed sharply. Be prepared to stop. Watch carefully for children.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "29": {"meaning": "Bicycle crossing or shared cycle route ahead. Cyclists may enter or cross the road.",
+           "action": "Check mirrors and blind spots. Give cyclists adequate space.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "30": {"meaning": "Ice or snow likely on road surface. Freezing conditions create significant skid risk.",
+           "action": "Reduce speed considerably. Increase following distance. Avoid harsh inputs.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    "31": {"meaning": "Wild animals crossing ahead. Deer or other animals may unexpectedly enter the road.",
+           "action": "Reduce speed and scan the road edges. Be ready to brake suddenly.",
+           "danger": "WARNING", "color": "#EF9F27"},
+
+    # ── End of restrictions (INFO) ────────────────────────────────────────────
+    "32": {"meaning": "End of all restrictions. All previously imposed speed limits and overtaking bans are lifted from this point.",
+           "action": "Normal road rules apply. Drive at a speed appropriate for conditions.",
+           "danger": "INFO", "color": "#1d9e75"},
+
+    # ── Directional mandatory (MANDATORY — blue circle) ───────────────────────
+    "33": {"meaning": "Turn right ahead mandatory. You must turn right at the upcoming junction — going straight or left is not permitted.",
+           "action": "Signal right and prepare to turn right at the next junction.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "34": {"meaning": "Turn left ahead mandatory. You must turn left at the upcoming junction — going straight or right is not permitted.",
+           "action": "Signal left and prepare to turn left at the next junction.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "35": {"meaning": "Proceed straight ahead only. You must continue straight — turning left or right is not permitted.",
+           "action": "Do not turn at the next junction. Proceed straight only.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "36": {"meaning": "Go straight or turn right. You may only proceed straight ahead or turn right — left turns are prohibited.",
+           "action": "Choose to go straight or turn right. Left turns are not allowed.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "37": {"meaning": "Go straight or turn left. You may only proceed straight ahead or turn left — right turns are prohibited.",
+           "action": "Choose to go straight or turn left. Right turns are not allowed.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "38": {"meaning": "Keep right. You must pass an obstacle or traffic island by keeping to the right side.",
+           "action": "Bear right and pass the obstacle or median on the right side.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "39": {"meaning": "Keep left. You must pass an obstacle or traffic island by keeping to the left side.",
+           "action": "Bear left and pass the obstacle or median on the left side.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    "40": {"meaning": "Roundabout ahead. Traffic in the roundabout has priority. You must give way before entering.",
+           "action": "Slow down. Yield to vehicles already circulating in the roundabout before entering.",
+           "danger": "MANDATORY", "color": "#e24b4a"},
+
+    # ── End of passing restrictions (INFO) ────────────────────────────────────
+    "41": {"meaning": "End of no-overtaking zone. The prohibition on overtaking all motor vehicles is now lifted.",
+           "action": "Overtaking is now permitted where it is safe to do so.",
+           "danger": "INFO", "color": "#1d9e75"},
+
+    "42": {"meaning": "End of no-overtaking zone for vehicles over 3.5 tonnes. Heavy vehicles may now overtake where safe.",
+           "action": "Heavy vehicles may resume overtaking where road conditions permit.",
+           "danger": "INFO", "color": "#1d9e75"},
 }
 
 # ── Theme CSS ─────────────────────────────────────────────────────────────────
