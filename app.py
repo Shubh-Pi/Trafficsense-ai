@@ -733,7 +733,7 @@ if st.session_state.active_tab == 0:
 
         if uploaded:
             img_pil = Image.open(uploaded).convert("RGB")
-            st.image(img_pil, use_container_width=True, caption="Uploaded image")
+            st.image(img_pil, use_column_width=True, caption="Uploaded image")
 
             if model_ok:
                 with st.spinner("Classifying..."):
@@ -777,7 +777,7 @@ if st.session_state.active_tab == 0:
             try:
                 heatmap = compute_gradcam(model, img_pil)
                 gcam_buf = make_gradcam_figure(img_pil, heatmap)
-                st.image(gcam_buf, use_container_width=True)
+                st.image(gcam_buf, use_column_width=True)
                 bg = "#13161f" if dark else "#f8fafc"
                 tc = "#64748b"
                 st.markdown(f"""
@@ -1055,7 +1055,7 @@ elif st.session_state.active_tab == 2:
         plt.savefig(buf, format="png", dpi=120, bbox_inches="tight", facecolor=bg_color)
         buf.seek(0)
         plt.close()
-        st.image(buf, use_container_width=True)
+        st.image(buf, use_column_width=True)
 
         # Top performing classes
         st.markdown('<div class="sec-label" style="margin-top:8px;">TOP PERFORMING CLASSES</div>', unsafe_allow_html=True)
