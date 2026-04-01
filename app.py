@@ -402,26 +402,45 @@ class TrafficSignNet(nn.Module):
 
 @st.cache_resource
 def load_model():
-    try:
-        obj = torch.load("traffic_sign_model_full.pth", map_location=DEVICE)
-        if isinstance(obj, dict):
-            model = TrafficSignNet(NUM_CLASSES)
-            model.load_state_dict(obj)
-        elif isinstance(obj, nn.Module):
-            model = obj
-        else:
-            raise ValueError(f"Unknown type: {type(obj)}")
-        model.eval()
-        return model, True
-    except Exception as e1:
+    model = TrafficSignNet(NUM_CLASSES)
+
+    for pth_file in ["traffic_sign_model_full.pth", "traffic_sign_model.pth", "best_model.pth"]:
+        if not os.path.exists(pth_file):
+            continue
         try:
-            model = TrafficSignNet(NUM_CLASSES)
-            state = torch.load("traffic_sign_model.pth", map_location=DEVICE)
-            model.load_state_dict(state)
-            model.eval()
-            return model, True
-        except Exception as e2:
-            return None, False
+            obj = torch.load(pth_file, map_location=DEVICE, weights_only=False)
+
+            # Case 1: it's already a state dict
+            if isinstance(obj, dict):
+                # Try strict first, then relaxed
+                try:
+                    model.load_state_dict(obj, strict=True)
+                except Exception:
+                    # Extract only matching keys (handles minor architecture diffs)
+                    own_state = model.state_dict()
+                    filtered = {k: v for k, v in obj.items() if k in own_state and own_state[k].shape == v.shape}
+                    own_state.update(filtered)
+                    model.load_state_dict(own_state)
+                model.eval()
+                return model, True
+
+            # Case 2: full model object saved with torch.save(model)
+            elif hasattr(obj, 'state_dict'):
+                saved_state = obj.state_dict()
+                try:
+                    model.load_state_dict(saved_state, strict=True)
+                except Exception:
+                    own_state = model.state_dict()
+                    filtered = {k: v for k, v in saved_state.items() if k in own_state and own_state[k].shape == v.shape}
+                    own_state.update(filtered)
+                    model.load_state_dict(own_state)
+                model.eval()
+                return model, True
+
+        except Exception:
+            continue
+
+    return None, False
 
 
 @st.cache_data
@@ -614,7 +633,13 @@ if "active_tab"  not in st.session_state: st.session_state.active_tab  = 0
 if "history"     not in st.session_state: st.session_state.history     = []
 
 # ── Load resources ────────────────────────────────────────────────────────────
+# Log available files for debugging
+import glob
+available = glob.glob("*.pth") + glob.glob("*.json")
+print(f"[TrafficSense] Files found: {available}")
+
 model, model_ok = load_model()
+print(f"[TrafficSense] Model loaded: {model_ok}")
 labels  = load_labels()
 summary = load_summary()
 
