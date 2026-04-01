@@ -404,11 +404,21 @@ class TrafficSignNet(nn.Module):
 def load_model():
     model = TrafficSignNet(NUM_CLASSES)
 
+    # Search multiple possible locations for the model file
+    pth_candidates = []
     for pth_file in ["traffic_sign_model_full.pth", "traffic_sign_model.pth", "best_model.pth"]:
-        if not os.path.exists(pth_file):
+        pth_candidates += [
+            pth_file,
+            f"/app/{pth_file}",
+            os.path.join(os.path.dirname(__file__), pth_file),
+        ]
+
+    for pth_path in pth_candidates:
+        if not os.path.exists(pth_path):
             continue
+        print(f"[TrafficSense] Trying model file: {pth_path}")
         try:
-            obj = torch.load(pth_file, map_location=DEVICE, weights_only=False)
+            obj = torch.load(pth_path, map_location=DEVICE, weights_only=False)
 
             # Case 1: it's already a state dict
             if isinstance(obj, dict):
@@ -445,8 +455,20 @@ def load_model():
 
 @st.cache_data
 def load_labels():
-    with open("labels.json") as f:
-        return json.load(f)
+    # Search multiple possible locations for labels.json
+    search_paths = [
+        "labels.json",
+        "/app/labels.json",
+        os.path.join(os.path.dirname(__file__), "labels.json"),
+    ]
+    for path in search_paths:
+        if os.path.exists(path):
+            print(f"[TrafficSense] Loading labels from: {path}")
+            with open(path) as f:
+                return json.load(f)
+    # Fallback: generate numeric labels so app doesn't crash
+    print("[TrafficSense] WARNING: labels.json not found, using numeric fallbacks")
+    return {str(i): f"Sign Class {i}" for i in range(43)}
 
 
 @st.cache_data
@@ -633,15 +655,34 @@ if "active_tab"  not in st.session_state: st.session_state.active_tab  = 0
 if "history"     not in st.session_state: st.session_state.history     = []
 
 # ── Load resources ────────────────────────────────────────────────────────────
-# Log available files for debugging
 import glob
-available = glob.glob("*.pth") + glob.glob("*.json")
-print(f"[TrafficSense] Files found: {available}")
 
-model, model_ok = load_model()
-print(f"[TrafficSense] Model loaded: {model_ok}")
-labels  = load_labels()
-summary = load_summary()
+try:
+    available = glob.glob("*.pth") + glob.glob("*.json") + glob.glob("/app/*.pth") + glob.glob("/app/*.json")
+    print(f"[TrafficSense] Files found: {available}")
+    print(f"[TrafficSense] Working dir: {os.getcwd()}")
+except Exception as e:
+    print(f"[TrafficSense] File scan error: {e}")
+
+try:
+    model, model_ok = load_model()
+    print(f"[TrafficSense] Model loaded: {model_ok}")
+except Exception as e:
+    print(f"[TrafficSense] Model load error: {e}")
+    model, model_ok = None, False
+
+try:
+    labels = load_labels()
+    print(f"[TrafficSense] Labels loaded: {len(labels)} classes")
+except Exception as e:
+    print(f"[TrafficSense] Labels load error: {e}")
+    labels = {str(i): f"Sign Class {i}" for i in range(43)}
+
+try:
+    summary = load_summary()
+except Exception as e:
+    print(f"[TrafficSense] Summary load error: {e}")
+    summary = {}
 
 # ── Inject CSS ────────────────────────────────────────────────────────────────
 st.markdown(get_css(st.session_state.dark_mode), unsafe_allow_html=True)
