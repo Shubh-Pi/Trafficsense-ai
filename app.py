@@ -46,14 +46,10 @@ def detect_mobile_from_ua() -> bool:
 if st.session_state.is_mobile is None:
     st.session_state.is_mobile = detect_mobile_from_ua()
 
-# ── Optional manual override in sidebar ───────────────────────────────────────
-with st.sidebar:
-    st.markdown("### ⚙️ Display")
-    current = "📱 Mobile" if st.session_state.is_mobile else "🖥️ Desktop"
-    st.caption(f"Detected: **{current}**")
-    if st.button("Switch to " + ("🖥️ Desktop" if st.session_state.is_mobile else "📱 Mobile")):
-        st.session_state.is_mobile = not st.session_state.is_mobile
-        st.rerun()
+# Sidebar hidden by BASE_CSS. Force layout via ?layout=mobile or ?layout=desktop
+_lp = st.query_params.get("layout", None)
+if _lp == "mobile":   st.session_state.is_mobile = True
+elif _lp == "desktop": st.session_state.is_mobile = False
 
 # ── Load models (shared) ───────────────────────────────────────────────────────
 from shared import load_models, load_all_labels
@@ -76,7 +72,7 @@ if st.session_state.is_mobile:
     import mobile_ui as ui
     st.markdown(ui.MOBILE_CSS, unsafe_allow_html=True)
     ui.render_navbar(mk, both_ok)
-    ui.render_model_strip(mk)
+    # model strip removed — switcher is now inside render_navbar
     mk         = st.session_state.mk
     model, mok = models_dict[mk]
     labels     = all_labels[mk]
