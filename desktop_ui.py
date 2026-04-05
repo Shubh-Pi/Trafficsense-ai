@@ -30,6 +30,36 @@ DESKTOP_CSS = BASE_CSS + """
 </style>
 """
 
+DESKTOP_CSS_LIGHT = BASE_CSS + """
+<style>
+/* ── Desktop light theme ──────────────────────────────────────── */
+.mobile-only { display: none !important; }
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="stMainBlockContainer"] {
+  background: #f5f7fa !important;
+  color: #111827 !important;
+}
+.navbar    { background: #ffffff !important; border-bottom: 1px solid #e5e7eb !important; }
+.nav-brand { color: #111827 !important; }
+.nav-sub   { color: #6b7280 !important; }
+.card      { background: #ffffff !important; border-color: #e5e7eb !important; }
+.card-body { color: #111827 !important; }
+.slabel    { color: #374151 !important; }
+.ik        { color: #6b7280 !important; }
+.iv        { color: #111827 !important; }
+.sg        { background: #ffffff !important; border-color: #e5e7eb !important; }
+.sc        { border-color: #e5e7eb !important; }
+.sl        { color: #6b7280 !important; }
+.sv        { color: #111827 !important; }
+[data-testid="stFileUploader"] { background: #ffffff !important; }
+[data-testid="stCameraInput"]  { background: #ffffff !important; }
+table.htbl th { color: #374151 !important; background: #f9fafb !important; }
+table.htbl td { color: #111827 !important; border-color: #e5e7eb !important; }
+</style>
+"""
+
 def render_navbar(mk, both_ok):
     st.markdown(f"""
 <div class="navbar">
@@ -52,34 +82,34 @@ def render_navbar(mk, both_ok):
 </div>""", unsafe_allow_html=True)
 
 def render_tab_row(mk, tab):
-    """Desktop: model switcher + 4 tab buttons in one horizontal row."""
-    c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 1, 1, 1, 1, 1, 0.4])
+    """Desktop: 4 tab buttons + dark/light toggle in one horizontal row."""
+    # Ensure theme state exists
+    if "is_dark" not in st.session_state:
+        st.session_state.is_dark = True
+
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 0.3])
     with c1:
-        if st.button("🇮🇳 Indian", key="d_indian",
-                     type="primary" if mk == "indian" else "secondary"):
-            st.session_state.mk = "indian"; st.rerun()
-    with c2:
-        if st.button("🌍 GTSRB", key="d_gtsrb",
-                     type="primary" if mk == "gtsrb" else "secondary"):
-            st.session_state.mk = "gtsrb"; st.rerun()
-    with c3:
         if st.button("📤 Upload", key="d_upload",
                      type="primary" if tab == 0 else "secondary"):
             st.session_state.tab = 0; st.rerun()
-    with c4:
+    with c2:
         if st.button("📷 Live", key="d_live",
                      type="primary" if tab == 1 else "secondary"):
             st.session_state.tab = 1; st.rerun()
-    with c5:
+    with c3:
         if st.button("📊 Stats", key="d_stats",
                      type="primary" if tab == 2 else "secondary"):
             st.session_state.tab = 2; st.rerun()
-    with c6:
+    with c4:
         if st.button("🕒 History", key="d_history",
                      type="primary" if tab == 3 else "secondary"):
             st.session_state.tab = 3; st.rerun()
-    with c7:
-        st.button("◐", key="d_contrast", type="secondary")
+    with c5:
+        icon = "🌙" if st.session_state.is_dark else "☀️"
+        if st.button(icon, key="d_theme", type="secondary",
+                     help="Toggle light / dark mode"):
+            st.session_state.is_dark = not st.session_state.is_dark
+            st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
