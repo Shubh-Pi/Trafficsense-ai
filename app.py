@@ -90,7 +90,10 @@ if st.session_state.is_mobile:
 
 else:
     import desktop_ui as ui
-    st.markdown(ui.DESKTOP_CSS, unsafe_allow_html=True)
+    if "is_dark" not in st.session_state:
+        st.session_state.is_dark = True
+    css = ui.DESKTOP_CSS if st.session_state.is_dark else ui.DESKTOP_CSS_LIGHT
+    st.markdown(css, unsafe_allow_html=True)
     ui.render_navbar(mk, both_ok)
     ui.render_tab_row(mk, tab)
     mk         = st.session_state.mk
