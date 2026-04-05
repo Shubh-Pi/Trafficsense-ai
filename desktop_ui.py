@@ -61,6 +61,7 @@ table.htbl td { color: #111827 !important; border-color: #e5e7eb !important; }
 """
 
 def render_navbar(mk, both_ok):
+    # Logo + branding on the left via markdown
     st.markdown(f"""
 <div class="navbar">
   <div class="nav-logo">
@@ -70,16 +71,23 @@ def render_navbar(mk, both_ok):
       <div class="nav-sub">Sign Recognition · ADAS · EfficientNet-B3</div>
     </div>
   </div>
-  <div class="nav-right">
-    <div class="model-sw">
-      <button class="model-btn {'active' if mk=='indian' else ''}">🇮🇳 Indian</button>
-      <button class="model-btn {'active' if mk=='gtsrb' else ''}">🌍 GTSRB</button>
-    </div>
-    <div class="status-pill">
-      <div class="sdot"></div>{'Both Models Ready' if both_ok else 'Partial Load'}
-    </div>
-  </div>
 </div>""", unsafe_allow_html=True)
+
+    # Real Streamlit buttons for model switching (right-aligned via columns)
+    _, nr1, nr2, nr3 = st.columns([6, 1.2, 1.2, 1.6])
+    with nr1:
+        if st.button("🇮🇳 Indian", key="nav_indian",
+                     type="primary" if mk == "indian" else "secondary"):
+            st.session_state.mk = "indian"; st.rerun()
+    with nr2:
+        if st.button("🌍 GTSRB", key="nav_gtsrb",
+                     type="primary" if mk == "gtsrb" else "secondary"):
+            st.session_state.mk = "gtsrb"; st.rerun()
+    with nr3:
+        status_color = "#22c55e" if both_ok else "#f59e0b"
+        status_text  = "Both Models Ready" if both_ok else "Partial Load"
+        st.markdown(f'<div class="status-pill" style="margin-top:6px;"><div class="sdot" style="background:{status_color};"></div>{status_text}</div>',
+                    unsafe_allow_html=True)
 
 def render_tab_row(mk, tab):
     """Desktop: 4 tab buttons + dark/light toggle in one horizontal row."""
