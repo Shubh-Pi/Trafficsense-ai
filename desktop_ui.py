@@ -32,31 +32,141 @@ DESKTOP_CSS = BASE_CSS + """
 
 DESKTOP_CSS_LIGHT = BASE_CSS + """
 <style>
-/* ── Desktop light theme ──────────────────────────────────────── */
-.mobile-only { display: none !important; }
+/* ══════════════════════════════════════════════════
+   LIGHT MODE — full override of every dark rule
+   All selectors need !important to beat BASE_CSS
+   ══════════════════════════════════════════════════ */
+
+/* ── Page background & text ── */
 html, body,
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"],
-[data-testid="stMainBlockContainer"] {
-  background: #f5f7fa !important;
-  color: #111827 !important;
-}
-.navbar    { background: #ffffff !important; border-bottom: 1px solid #e5e7eb !important; }
+[data-testid="stMainBlockContainer"],
+[data-testid="stVerticalBlock"],
+section.main { background: #f0f2f8 !important; color: #111827 !important; }
+
+/* ── Navbar ── */
+.navbar { background: #ffffff !important; border-bottom: 1px solid #d1d5db !important; }
 .nav-brand { color: #111827 !important; }
-.nav-sub   { color: #6b7280 !important; }
-.card      { background: #ffffff !important; border-color: #e5e7eb !important; }
+.nav-brand span { color: #e24b4a !important; }
+.nav-sub { color: #6b7280 !important; }
+.nav-logo-icon { background: rgba(226,75,74,0.1) !important; border-color: rgba(226,75,74,0.3) !important; }
+
+/* ── Cards ── */
+.card { background: #ffffff !important; border-color: #e5e7eb !important; }
 .card-body { color: #111827 !important; }
-.slabel    { color: #374151 !important; }
-.ik        { color: #6b7280 !important; }
-.iv        { color: #111827 !important; }
-.sg        { background: #ffffff !important; border-color: #e5e7eb !important; }
-.sc        { border-color: #e5e7eb !important; }
-.sl        { color: #6b7280 !important; }
-.sv        { color: #111827 !important; }
-[data-testid="stFileUploader"] { background: #ffffff !important; }
-[data-testid="stCameraInput"]  { background: #ffffff !important; }
-table.htbl th { color: #374151 !important; background: #f9fafb !important; }
-table.htbl td { color: #111827 !important; border-color: #e5e7eb !important; }
+.ct  { background: linear-gradient(90deg,#e24b4a,rgba(226,75,74,0.15),transparent) !important; }
+.ctb { background: linear-gradient(90deg,#3b82f6,rgba(59,130,246,0.15),transparent) !important; }
+.ctg { background: linear-gradient(90deg,#22c55e,rgba(34,197,94,0.15),transparent) !important; }
+
+/* ── Dropzone ── */
+.dz { background: #ffffff !important; border-color: #d1d5db !important; }
+.dz:hover { border-color: rgba(226,75,74,0.4) !important; }
+.dz-title { color: #111827 !important; }
+.dz-sub   { color: #6b7280 !important; }
+.dz-fmt   { color: #9ca3af !important; }
+
+/* ── Stats grid ── */
+.sg { background: transparent !important; }
+.sc { background: #ffffff !important; border-color: #e5e7eb !important; }
+.sl { color: #6b7280 !important; }
+.sv { color: #111827 !important; }
+
+/* ── Labels & text ── */
+.slabel   { color: #6b7280 !important; }
+.ik       { color: #6b7280 !important; }
+.iv       { color: #111827 !important; }
+.ba-label { color: #6b7280 !important; }
+.ptime    { background: rgba(34,197,94,0.07) !important; border-color: rgba(34,197,94,0.25) !important; color: #16a34a !important; }
+
+/* ── Info rows ── */
+.ir { border-bottom-color: #e5e7eb !important; }
+.ir:last-child { border-bottom: none !important; }
+
+/* ── Progress / confidence bars ── */
+.pb-bg { background: #e5e7eb !important; }
+.conf-big { border-top-color: #e5e7eb !important; border-bottom-color: #e5e7eb !important; color: #111827 !important; }
+
+/* ── Prediction boxes ── */
+.mbox { background: rgba(226,75,74,0.05) !important; border-left-color: #e24b4a !important; }
+.abox { background: rgba(34,197,94,0.05) !important; border-left-color: #22c55e !important; }
+.blabel { color: inherit !important; }
+.btext  { color: #111827 !important; }
+.pred-name { color: #111827 !important; }
+.pred-sub  { color: #6b7280 !important; }
+
+/* ── Live tab ── */
+.live-name { color: #111827 !important; }
+.live-conf { color: #111827 !important; }
+.latrow    { color: #6b7280 !important; }
+
+/* ── No-sign ── */
+.nosign      { background: #ffffff !important; border-color: #d1d5db !important; }
+.nosign-tips { background: #f9fafb !important; border-color: #e5e7eb !important; }
+.ntip        { color: #6b7280 !important; }
+
+/* ── Top-3 bars ── */
+.bn { color: #374151 !important; }
+.bb { background: #e5e7eb !important; }
+.bp { color: #374151 !important; }
+
+/* ── Tables ── */
+.comptbl th { color: #374151 !important; border-bottom-color: #e5e7eb !important; background: #f9fafb !important; }
+.comptbl td { color: #374151 !important; border-bottom-color: #e5e7eb !important; }
+.met        { color: #374151 !important; }
+.htbl th    { color: #374151 !important; border-bottom-color: #e5e7eb !important; background: #f9fafb !important; }
+.htbl td    { color: #374151 !important; border-bottom-color: #e5e7eb !important; }
+.hname      { color: #111827 !important; }
+
+/* ── History most-detected ── */
+.most-det       { background: linear-gradient(135deg,rgba(226,75,74,0.06),rgba(226,75,74,0.01)) !important; border-color: rgba(226,75,74,0.2) !important; }
+.most-det-label { color: #6b7280 !important; }
+.most-det-name  { color: #111827 !important; }
+
+/* ── Per-class bars ── */
+.cab-name { color: #374151 !important; }
+.cab-bg   { background: #e5e7eb !important; }
+
+/* ── Confidence indicators ── */
+.ci-h { background: rgba(34,197,94,0.06) !important; border-color: rgba(34,197,94,0.25) !important; color: #16a34a !important; }
+.ci-l { background: rgba(245,158,11,0.06) !important; border-color: rgba(245,158,11,0.25) !important; color: #d97706 !important; }
+.wbanner { background: rgba(245,158,11,0.05) !important; border-color: rgba(245,158,11,0.25) !important; color: #92400e !important; }
+.mwarn   { background: rgba(168,85,247,0.05) !important; border-color: rgba(168,85,247,0.2) !important;  color: #7c3aed !important; }
+
+/* ── Streamlit widget overrides ── */
+.stButton > button[kind="secondary"] {
+  background: #ffffff !important;
+  color: #374151 !important;
+  border: 1px solid #d1d5db !important;
+}
+.stButton > button[kind="secondary"]:hover {
+  color: #111827 !important;
+  border-color: #9ca3af !important;
+}
+div[data-testid="stCameraInput"] {
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+.stCheckbox label { color: #374151 !important; }
+div[data-testid="stDownloadButton"] > button {
+  background: #ffffff !important;
+  color: #16a34a !important;
+  border-color: rgba(34,197,94,0.3) !important;
+}
+/* File uploader area */
+[data-testid="stFileUploader"] {
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+/* Selectbox / text input */
+[data-testid="stTextInput"] input,
+[data-testid="stSelectbox"] > div {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+/* Model info section sidebar */
+.mobile-only { display: none !important; }
 </style>
 """
 
