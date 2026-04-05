@@ -30,6 +30,10 @@ for k, v in [
     if k not in st.session_state:
         st.session_state[k] = v
 
+_qp = st.query_params
+if "mk"  in _qp: st.session_state.mk  = _qp["mk"]
+if "tab" in _qp: st.session_state.tab = int(_qp["tab"])
+
 # ── Device detection via User-Agent (server-side, no JS required) ──────────────
 def detect_mobile_from_ua() -> bool:
     """Read User-Agent from request headers — works inside HF Spaces iframes."""
