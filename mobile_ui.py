@@ -31,30 +31,6 @@ MOBILE_CSS = BASE_CSS + """
   gap: 6px !important;
 }
 .nav-sub { display: none; }
-.status-pill { font-size: 10px !important; padding: 4px 10px !important; }
-
-/* Model switcher strip — top, full width, below navbar */
-.model-strip {
-  display: flex;
-  gap: 0;
-  background: #0d0f18;
-  border-bottom: 1px solid #1a1d2e;
-}
-.model-strip .stButton > button {
-  border-radius: 0 !important;
-  border: none !important;
-  border-bottom: 2px solid transparent !important;
-  background: transparent !important;
-  color: #4b5563 !important;
-  font-size: 13px !important;
-  padding: 10px 0 !important;
-}
-.model-strip .stButton > button[kind="primary"] {
-  color: #e24b4a !important;
-  border-bottom: 2px solid #e24b4a !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
 
 /* Content area — extra bottom padding so nav bar doesn't cover content */
 .wrap {
@@ -82,33 +58,13 @@ MOBILE_CSS = BASE_CSS + """
 .bn        { width: 110px !important; }
 
 /* ── Fixed bottom nav ──────────────────────────────────────────── */
-/* 
-  IMPORTANT: We cannot inject Streamlit buttons inside an arbitrary HTML div.
-  Instead we render a real st.columns(4) row of st.button() widgets, 
-  then use CSS to fix that specific row to the bottom of the viewport.
-  
-  We tag the container with a data attribute via JS injected in the page,
-  and use a robust CSS selector to grab it.
-  
-  Fallback: we use the nth-of-type of the last horizontal block rendered.
-  To make this reliable we render the bottom nav LAST on the page,
-  wrapped in a unique sentinel div.
-*/
-.bottom-nav-sentinel + div[data-testid="stVerticalBlock"],
-.bottom-nav-sentinel ~ div[data-testid="stVerticalBlock"] {
-  /* not used — see JS approach below */
-}
-
-/* The sentinel + columns trick: 
-   We render a zero-height sentinel div, then the 4-column nav row.
-   JS finds the sentinel, then fixes the next sibling columns block. */
 .bnav-row {
   position: fixed !important;
   bottom: 0 !important;
   left: 0 !important;
   right: 0 !important;
   background: #0d0f18 !important;
-  border-top: 2px solid #1a1d2e !important;
+  border-top: 1px solid #1a1d2e !important;
   z-index: 9999 !important;
   padding: 4px 0 env(safe-area-inset-bottom, 8px) !important;
   display: flex !important;
@@ -134,29 +90,22 @@ MOBILE_CSS = BASE_CSS + """
   box-shadow: none !important;
   line-height: 1.3 !important;
 }
-.bnav-row .stButton > button:hover { opacity: 1 !important; }
-
-/* Active tab nav button */
-.bnav-active .stButton > button {
-  color: #e24b4a !important;
-  border-top: 2px solid #e24b4a !important;
+.bnav-row .stButton > button:hover {
+  opacity: 1 !important;
+  color: #9ca3af !important;
 }
 </style>
 
 <script>
-// Fix the bottom nav row to the viewport bottom
-// We find the div containing our sentinel class and fix its next sibling
 (function fixBottomNav() {
   function doFix() {
     const sentinel = document.querySelector('.bnav-sentinel');
     if (!sentinel) { setTimeout(doFix, 200); return; }
-    // Walk up to the stVerticalBlock, then find the next columns block
     let el = sentinel;
     while (el && el.getAttribute('data-testid') !== 'stVerticalBlock') {
       el = el.parentElement;
     }
     if (!el) { setTimeout(doFix, 200); return; }
-    // The next sibling stHorizontalBlock is our nav row
     let sib = el.nextElementSibling;
     while (sib) {
       if (sib.getAttribute('data-testid') === 'stHorizontalBlock') {
@@ -178,8 +127,8 @@ MOBILE_CSS = BASE_CSS + """
 
 
 def render_navbar(mk, both_ok):
-    """Compact mobile navbar — logo + status only (model switcher is below in strip)."""
-    st.markdown(f"""
+    """Mobile navbar — logo on left, model buttons + status on right."""
+    st.markdown("""
 <div class="navbar">
   <div class="nav-logo">
     <div class="nav-logo-icon">🚦</div>
@@ -187,49 +136,65 @@ def render_navbar(mk, both_ok):
       <div class="nav-brand">TrafficSense<span>AI</span></div>
     </div>
   </div>
-  <div class="nav-right">
-    <div class="status-pill">
-      <div class="sdot"></div>{'Ready' if both_ok else 'Partial'}
-    </div>
-  </div>
 </div>""", unsafe_allow_html=True)
 
-
-def render_model_strip(mk):
-    """Full-width model switcher strip — shown below navbar on mobile."""
-    st.markdown('<div class="model-strip">', unsafe_allow_html=True)
-    mc1, mc2 = st.columns(2)
-    with mc1:
+    # Real model switcher buttons + status pill in columns
+    nb1, nb2, nb3 = st.columns([1, 1, 1.2])
+    with nb1:
         if st.button("🇮🇳 Indian", key="m_indian",
                      type="primary" if mk == "indian" else "secondary"):
             st.session_state.mk = "indian"; st.rerun()
-    with mc2:
+    with nb2:
         if st.button("🌍 GTSRB", key="m_gtsrb",
                      type="primary" if mk == "gtsrb" else "secondary"):
             st.session_state.mk = "gtsrb"; st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    with nb3:
+        status_color = "#22c55e" if both_ok else "#f59e0b"
+        label = "✅ Ready" if both_ok else "⚠️ Partial"
+        st.markdown(
+            f'<div style="margin-top:6px;background:rgba(34,197,94,0.07);'
+            f'border:1px solid rgba(34,197,94,0.2);border-radius:20px;padding:5px 8px;'
+            f'font-size:10px;color:{status_color};font-weight:500;text-align:center;">'
+            f'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
+            f'background:{status_color};margin-right:4px;vertical-align:middle;"></span>'
+            f'{label}</div>',
+            unsafe_allow_html=True
+        )
+
+
+def render_model_strip(mk):
+    """No-op — model switcher is now in the navbar."""
+    pass
 
 
 def render_bottom_nav(tab):
     """
-    Fixed bottom nav with 4 real Streamlit buttons.
-    Rendered LAST on the page. JS + CSS fixes it to viewport bottom.
+    Fixed bottom nav with 4 real Streamlit buttons side-by-side.
+    Active tab shown with accent color top border, no red bar background.
     """
-    # Sentinel — JS finds this to locate the nav row
     st.markdown('<div class="bnav-sentinel" style="height:0;overflow:hidden;"></div>',
                 unsafe_allow_html=True)
-    # 4 real st.button() columns — CSS/JS will fix this row to the bottom
     items = [("📤", "Upload", 0), ("📷", "Live", 1), ("📊", "Stats", 2), ("🕒", "History", 3)]
     cols  = st.columns(4)
     for col, (icon, name, idx) in zip(cols, items):
-        # Wrap active tab in a div so CSS can target it
         active = (tab == idx)
-        if active:
-            st.markdown(f'<style>.bnav-active-{idx} .stButton>button{{color:#e24b4a!important;border-top:2px solid #e24b4a!important;}}</style>', unsafe_allow_html=True)
         with col:
+            if active:
+                st.markdown(
+                    f'<style>'
+                    f'[data-testid="stHorizontalBlock"]:last-of-type '
+                    f'[data-testid="column"]:nth-child({idx+1}) .stButton > button {{'
+                    f'  color: #e24b4a !important;'
+                    f'  border-top: 2px solid #e24b4a !important;'
+                    f'  background: transparent !important;'
+                    f'  box-shadow: none !important;'
+                    f'}}</style>',
+                    unsafe_allow_html=True
+                )
             label = f"{icon}\n{name}"
             if st.button(label, key=f"bnav_{idx}", type="secondary"):
                 st.session_state.tab = idx; st.rerun()
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
