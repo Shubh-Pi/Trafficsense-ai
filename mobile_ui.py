@@ -1,9 +1,8 @@
 """
 mobile_ui.py — Mobile layout for TrafficSense AI
-- NO top tab row
-- Fixed bottom nav bar (4 buttons: Upload, Live, Stats, History)
-- Model switcher in a compact top strip
-- Single-column content for all tabs
+Strategy: Use CSS nth-of-type to style Streamlit's own rendered stHorizontalBlock
+elements directly. Never wrap st.columns() inside st.markdown() divs — Streamlit
+breaks out of them and they cause stacking.
 """
 import io as _io, datetime, time
 import numpy as np
@@ -18,46 +17,38 @@ from shared import (
     render_top3, draw_sparkline, draw_gauge, BASE_CSS
 )
 
-# ── Mobile-specific CSS ────────────────────────────────────────────────────────
+# ── Mobile CSS ─────────────────────────────────────────────────────────────────
 MOBILE_CSS = BASE_CSS + """
 <style>
-/* ── Mobile layout ─────────────────────────────────────────────── */
 
-/* Compact navbar for mobile */
-.navbar {
-  height: auto !important;
-  flex-wrap: wrap !important;
-  padding: 8px 14px !important;
-  gap: 6px !important;
-}
-.nav-sub { display: none; }
+/* ── Hide nav-sub on mobile ── */
+.nav-sub { display: none !important; }
+.navbar  { padding: 8px 14px !important; height: auto !important; }
 
-/* ── Navbar model switcher buttons — compact side-by-side ── */
-.navbar-model-row [data-testid="stHorizontalBlock"] {
-  gap: 6px !important;
-  padding: 6px 10px !important;
+/* ── Model switcher row: 1st stHorizontalBlock after navbar ──
+   Target it by making all top-level horizontal blocks compact  */
+[data-testid="stMainBlockContainer"] > div > [data-testid="stVerticalBlock"]
+  > [data-testid="stHorizontalBlock"]:first-of-type {
   background: #0d0f18;
   border-bottom: 1px solid #1a1d2e;
-}
-.navbar-model-row .stButton > button {
-  padding: 6px 10px !important;
-  font-size: 12px !important;
-  border-radius: 8px !important;
-  width: 100% !important;
-}
-.navbar-model-row .stButton > button[kind="secondary"] {
-  background: #13151f !important;
-  color: #6b7280 !important;
-  border: 1px solid #1a1d2e !important;
-}
-.navbar-model-row .stButton > button[kind="primary"] {
-  background: #e24b4a !important;
-  color: #fff !important;
-}
-  padding: 14px 12px 90px !important;
+  padding: 4px 8px !important;
+  gap: 6px !important;
 }
 
-/* Page title */
+/* All buttons in model row: compact, no big padding */
+[data-testid="stMainBlockContainer"] > div > [data-testid="stVerticalBlock"]
+  > [data-testid="stHorizontalBlock"]:first-of-type .stButton > button {
+  padding: 7px 6px !important;
+  font-size: 13px !important;
+  border-radius: 8px !important;
+  width: 100% !important;
+  min-height: 36px !important;
+}
+
+/* ── Content wrap ── */
+.wrap { padding: 14px 12px 90px !important; }
+
+/* ── Page title ── */
 .mob-page-title {
   font-size: 11px;
   font-weight: 700;
@@ -69,7 +60,7 @@ MOBILE_CSS = BASE_CSS + """
   border-bottom: 1px solid #1a1d2e;
 }
 
-/* Prediction card — tighter on mobile */
+/* ── Mobile font scaling ── */
 .pred-name { font-size: 17px !important; }
 .conf-big  { font-size: 36px !important; }
 .live-conf { font-size: 44px !important; }
@@ -77,7 +68,7 @@ MOBILE_CSS = BASE_CSS + """
 .sv        { font-size: 22px !important; }
 .bn        { width: 110px !important; }
 
-/* ── Fixed bottom nav ──────────────────────────────────────────── */
+/* ── Bottom nav bar ── */
 .bnav-row {
   position: fixed !important;
   bottom: 0 !important;
@@ -86,137 +77,124 @@ MOBILE_CSS = BASE_CSS + """
   background: #0d0f18 !important;
   border-top: 1px solid #1a1d2e !important;
   z-index: 9999 !important;
-  padding: 4px 0 env(safe-area-inset-bottom, 8px) !important;
-  display: flex !important;
+  padding: 4px 0 env(safe-area-inset-bottom, 6px) !important;
 }
-.bnav-row [data-testid="column"] {
-  display: flex !important;
-  justify-content: center !important;
+.bnav-row [data-testid="stHorizontalBlock"] {
+  gap: 0 !important;
+  padding: 0 !important;
 }
 .bnav-row .stButton > button {
   background: transparent !important;
   border: none !important;
   border-top: 2px solid transparent !important;
   color: #4b5563 !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   font-weight: 500 !important;
-  padding: 6px 4px 2px !important;
+  padding: 8px 4px 4px !important;
   width: 100% !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  gap: 2px !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  line-height: 1.3 !important;
+  min-height: 48px !important;
 }
 .bnav-row .stButton > button:hover {
   opacity: 1 !important;
-  color: #9ca3af !important;
+  background: transparent !important;
 }
+
 </style>
 
 <script>
+/* Fix the last stHorizontalBlock to be the bottom nav */
 (function fixBottomNav() {
   function doFix() {
     const sentinel = document.querySelector('.bnav-sentinel');
-    if (!sentinel) { setTimeout(doFix, 200); return; }
+    if (!sentinel) { setTimeout(doFix, 150); return; }
     let el = sentinel;
     while (el && el.getAttribute('data-testid') !== 'stVerticalBlock') {
       el = el.parentElement;
     }
-    if (!el) { setTimeout(doFix, 200); return; }
+    if (!el) { setTimeout(doFix, 150); return; }
     let sib = el.nextElementSibling;
+    let found = null;
     while (sib) {
-      if (sib.getAttribute('data-testid') === 'stHorizontalBlock') {
-        sib.classList.add('bnav-row');
-        return;
-      }
+      if (sib.getAttribute('data-testid') === 'stHorizontalBlock') found = sib;
       sib = sib.nextElementSibling;
     }
-    setTimeout(doFix, 200);
+    if (found) {
+      found.classList.add('bnav-row');
+
+      /* Mark active tab button with red accent */
+      const activeIdx = parseInt(sentinel.getAttribute('data-active') || '0');
+      const cols = found.querySelectorAll('[data-testid="column"]');
+      cols.forEach((col, i) => {
+        const btn = col.querySelector('button');
+        if (!btn) return;
+        if (i === activeIdx) {
+          btn.style.color = '#e24b4a';
+          btn.style.borderTop = '2px solid #e24b4a';
+        }
+      });
+    } else {
+      setTimeout(doFix, 150);
+    }
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', doFix);
-  } else {
-    doFix();
-  }
+  } else { doFix(); }
 })();
 </script>
 """
 
 
 def render_navbar(mk, both_ok):
-    """Mobile navbar — logo on left, then model buttons + status in a row below."""
-    st.markdown("""
+    """Navbar: logo HTML, then model buttons as a real st.columns row (no wrapping div)."""
+    status_color = "#22c55e" if both_ok else "#f59e0b"
+    status_text  = "Ready" if both_ok else "Partial"
+    st.markdown(f"""
 <div class="navbar">
   <div class="nav-logo">
     <div class="nav-logo-icon">🚦</div>
-    <div>
-      <div class="nav-brand">TrafficSense<span>AI</span></div>
+    <div><div class="nav-brand">TrafficSense<span>AI</span></div></div>
+  </div>
+  <div class="nav-right">
+    <div class="status-pill">
+      <div class="sdot" style="background:{status_color};"></div>
+      <span style="color:{status_color};">{status_text}</span>
     </div>
   </div>
-</div>
-<div class="navbar-model-row">""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
-    nb1, nb2, nb3 = st.columns([1, 1, 1.1])
-    with nb1:
+    # Real buttons — rendered as Streamlit's own stHorizontalBlock (1st one on page)
+    # CSS above targets :first-of-type to style this row compactly
+    c1, c2 = st.columns(2)
+    with c1:
         if st.button("🇮🇳 Indian", key="m_indian",
                      type="primary" if mk == "indian" else "secondary"):
             st.session_state.mk = "indian"; st.rerun()
-    with nb2:
+    with c2:
         if st.button("🌍 GTSRB", key="m_gtsrb",
                      type="primary" if mk == "gtsrb" else "secondary"):
             st.session_state.mk = "gtsrb"; st.rerun()
-    with nb3:
-        status_color = "#22c55e" if both_ok else "#f59e0b"
-        label = "✅ Ready" if both_ok else "⚠️ Partial"
-        st.markdown(
-            f'<div style="margin-top:6px;background:rgba(34,197,94,0.07);'
-            f'border:1px solid rgba(34,197,94,0.2);border-radius:20px;padding:5px 8px;'
-            f'font-size:10px;color:{status_color};font-weight:500;text-align:center;">'
-            f'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
-            f'background:{status_color};margin-right:4px;vertical-align:middle;"></span>'
-            f'{label}</div>',
-            unsafe_allow_html=True
-        )
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_model_strip(mk):
-    """No-op — model switcher is now in the navbar."""
+    """No-op — model switcher is now in render_navbar."""
     pass
 
 
 def render_bottom_nav(tab):
-    """
-    Fixed bottom nav with 4 real Streamlit buttons side-by-side.
-    Active tab shown with accent color top border, no red bar background.
-    """
-    st.markdown('<div class="bnav-sentinel" style="height:0;overflow:hidden;"></div>',
-                unsafe_allow_html=True)
+    """Fixed bottom nav — 4 tabs side by side. JS fixes it to viewport bottom."""
+    # Sentinel carries the active tab index for JS to highlight
+    st.markdown(
+        f'<div class="bnav-sentinel" data-active="{tab}" style="height:0;overflow:hidden;"></div>',
+        unsafe_allow_html=True
+    )
     items = [("📤", "Upload", 0), ("📷", "Live", 1), ("📊", "Stats", 2), ("🕒", "History", 3)]
     cols  = st.columns(4)
     for col, (icon, name, idx) in zip(cols, items):
-        active = (tab == idx)
         with col:
-            if active:
-                st.markdown(
-                    f'<style>'
-                    f'[data-testid="stHorizontalBlock"]:last-of-type '
-                    f'[data-testid="column"]:nth-child({idx+1}) .stButton > button {{'
-                    f'  color: #e24b4a !important;'
-                    f'  border-top: 2px solid #e24b4a !important;'
-                    f'  background: transparent !important;'
-                    f'  box-shadow: none !important;'
-                    f'}}</style>',
-                    unsafe_allow_html=True
-                )
-            label = f"{icon}\n{name}"
-            if st.button(label, key=f"bnav_{idx}", type="secondary"):
+            if st.button(f"{icon}\n{name}", key=f"bnav_{idx}", type="secondary"):
                 st.session_state.tab = idx; st.rerun()
-
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -272,7 +250,6 @@ def render_upload_tab(model, mok, mk, mk_label, labels):
                     })
                     st.session_state.upload_history = st.session_state.upload_history[:MAX_HISTORY]
         else:
-            # Batch: single column on mobile
             for i, f in enumerate(files):
                 raw = Image.open(f); proc, warns, _ = preprocess_image(raw)
                 st.image(proc, use_column_width=True, caption=f.name[:20])
@@ -296,7 +273,6 @@ def render_upload_tab(model, mok, mk, mk_label, labels):
                         })
             st.session_state.upload_history = st.session_state.upload_history[:MAX_HISTORY]
 
-    # Quick stats below upload on mobile
     n_up  = len(st.session_state.upload_history)
     avg_c = np.mean([h["conf"] for h in st.session_state.upload_history]) if st.session_state.upload_history else 0.0
     from shared import load_summary
@@ -317,7 +293,7 @@ def render_upload_tab(model, mok, mk, mk_label, labels):
 def render_live_tab(model, mok, mk, mk_label, labels):
     st.markdown('<div class="wrap">', unsafe_allow_html=True)
     st.markdown(f'<div class="mob-page-title">📷 Live · {mk_label}</div>', unsafe_allow_html=True)
-    st.markdown('<div style="background:#0d0f18;border:1px solid #1a1d2e;border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:11px;color:#4b5563;">🎯 Centre the sign · fill 60%+ of frame · hold steady for 2 seconds 📱</div>', unsafe_allow_html=True)
+    st.markdown('<div style="background:#0d0f18;border:1px solid #1a1d2e;border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:11px;color:#4b5563;">🎯 Centre the sign · fill 60%+ of frame · hold steady 📱</div>', unsafe_allow_html=True)
     cam = st.camera_input("Camera", label_visibility="collapsed", key=f"mob_cam_{mk}")
     ca1, ca2 = st.columns(2)
     with ca1: auto = st.checkbox("🔄 Auto-refresh", value=not st.session_state.freeze)
@@ -367,7 +343,6 @@ def render_live_tab(model, mok, mk, mk_label, labels):
         st.markdown('<div class="slabel">Confidence Trend</div>', unsafe_allow_html=True)
         sp = draw_sparkline(st.session_state.sparkline)
         if sp: st.image(sp, use_column_width=True)
-    # Session stats
     wh = st.session_state.webcam_history; n_det = len(wh)
     avg_c = np.mean([h["conf"] for h in wh]) if wh else 0
     st.markdown(f'<div style="background:#0d0f18;border:1px solid #1a1d2e;border-radius:10px;padding:12px 14px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#4b5563;">Signs detected</span><span style="font-family:\'JetBrains Mono\',monospace;font-size:22px;font-weight:700;color:#22c55e;">{n_det}</span></div>', unsafe_allow_html=True)
@@ -389,7 +364,6 @@ def render_stats_tab(mk):
     i_p1=i_s.get("phase1_best_val_acc",49.19); i_p2=i_s.get("phase2_best_val_acc",76.81)
     g_t1=g_s.get("final_val_acc",83.42); g_t3=g_s.get("final_top3_acc",97.09)
     g_p1=g_s.get("phase1_best_val_acc",39.53); g_p2=g_s.get("phase2_best_val_acc",83.42)
-    # Gauges side by side
     gc1, gc2 = st.columns(2)
     with gc1:
         g1 = draw_gauge(i_t1,"#93c5fd","🇮🇳 Indian")
@@ -397,7 +371,6 @@ def render_stats_tab(mk):
     with gc2:
         g2 = draw_gauge(g_t1,"#fca5a5","🌍 GTSRB")
         if g2: st.image(g2, use_column_width=True)
-    # Comparison table
     comp = [
         ("Top-1 Acc",f"{i_t1:.1f}%",f"{g_t1:.1f}%"),
         ("Top-3 Acc",f"{i_t3:.1f}%",f"{g_t3:.1f}%"),
@@ -407,7 +380,6 @@ def render_stats_tab(mk):
     ]
     rows_h = "".join(f'<tr><td class="met">{m}</td><td class="vv" style="color:#93c5fd;">{iv}</td><td class="vv" style="color:#fca5a5;">{gv}</td></tr>' for m,iv,gv in comp)
     st.markdown(f'<div class="card" style="margin-top:12px;"><div class="card-body"><table class="comptbl"><thead><tr><th>Metric</th><th style="text-align:center;">🇮🇳</th><th style="text-align:center;">🌍</th></tr></thead><tbody>{rows_h}</tbody></table></div></div>', unsafe_allow_html=True)
-    # Training curve (compact)
     ih1=i_s.get("training_history",{}).get("phase1",{}); ih2=i_s.get("training_history",{}).get("phase2",{})
     gh1=g_s.get("training_history",{}).get("phase1",{}); gh2=g_s.get("training_history",{}).get("phase2",{})
     i_val=ih1.get("val_acc",[])+ih2.get("val_acc",[]); g_val=gh1.get("val_acc",[])+gh2.get("val_acc",[])
@@ -441,7 +413,6 @@ def render_history_tab():
         icon  = DANGER_ICONS.get(top_info.get("danger","INFO"),"🟢")
         color = DANGER_COLORS.get(top_info.get("danger","INFO"),"#22c55e")
         st.markdown(f'<div class="most-det"><div class="most-det-icon">{icon}</div><div><div class="most-det-label">Most Detected</div><div class="most-det-name">{top_sign[:22]}</div></div><div class="most-det-count" style="color:{color};">{top_count}×</div></div>', unsafe_allow_html=True)
-    # Upload history
     st.markdown('<div class="slabel">📤 Upload History</div>', unsafe_allow_html=True)
     if uh:
         su = st.text_input("Filter signs…", key="mob_su", label_visibility="collapsed", placeholder="Filter by name…")
@@ -456,7 +427,6 @@ def render_history_tab():
     else:
         st.markdown('<div style="text-align:center;padding:20px;color:#374151;font-size:12px;">No upload history yet</div>', unsafe_allow_html=True)
     st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-    # Webcam history
     st.markdown('<div class="slabel">📷 Webcam History</div>', unsafe_allow_html=True)
     if wh:
         st.markdown('<div class="card"><div class="card-body"><table class="htbl"><thead><tr><th>Sign</th><th>Conf</th><th>Type</th></tr></thead><tbody>', unsafe_allow_html=True)
