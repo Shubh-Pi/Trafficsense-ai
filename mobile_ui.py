@@ -32,8 +32,28 @@ MOBILE_CSS = BASE_CSS + """
 }
 .nav-sub { display: none; }
 
-/* Content area — extra bottom padding so nav bar doesn't cover content */
-.wrap {
+/* ── Navbar model switcher buttons — compact side-by-side ── */
+.navbar-model-row [data-testid="stHorizontalBlock"] {
+  gap: 6px !important;
+  padding: 6px 10px !important;
+  background: #0d0f18;
+  border-bottom: 1px solid #1a1d2e;
+}
+.navbar-model-row .stButton > button {
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+  width: 100% !important;
+}
+.navbar-model-row .stButton > button[kind="secondary"] {
+  background: #13151f !important;
+  color: #6b7280 !important;
+  border: 1px solid #1a1d2e !important;
+}
+.navbar-model-row .stButton > button[kind="primary"] {
+  background: #e24b4a !important;
+  color: #fff !important;
+}
   padding: 14px 12px 90px !important;
 }
 
@@ -127,7 +147,7 @@ MOBILE_CSS = BASE_CSS + """
 
 
 def render_navbar(mk, both_ok):
-    """Mobile navbar — logo on left, model buttons + status on right."""
+    """Mobile navbar — logo on left, then model buttons + status in a row below."""
     st.markdown("""
 <div class="navbar">
   <div class="nav-logo">
@@ -136,10 +156,10 @@ def render_navbar(mk, both_ok):
       <div class="nav-brand">TrafficSense<span>AI</span></div>
     </div>
   </div>
-</div>""", unsafe_allow_html=True)
+</div>
+<div class="navbar-model-row">""", unsafe_allow_html=True)
 
-    # Real model switcher buttons + status pill in columns
-    nb1, nb2, nb3 = st.columns([1, 1, 1.2])
+    nb1, nb2, nb3 = st.columns([1, 1, 1.1])
     with nb1:
         if st.button("🇮🇳 Indian", key="m_indian",
                      type="primary" if mk == "indian" else "secondary"):
@@ -160,6 +180,8 @@ def render_navbar(mk, both_ok):
             f'{label}</div>',
             unsafe_allow_html=True
         )
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_model_strip(mk):
