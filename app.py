@@ -1,13 +1,13 @@
 """
 app.py — TrafficSense AI entry point
-Detects mobile vs desktop using a JS → query_params bridge on first load,
-then routes to mobile_ui.py or desktop_ui.py exclusively.
+HF Spaces Fix: The previous JS approach failed because HF Spaces embeds
+Streamlit in a cross-origin iframe — window.parent is blocked by the browser,
+so the ?w= redirect never fired.
 
-FIX: st.markdown() silently strips <script> tags — JS never ran.
-     Now uses st.components.v1.html() which actually executes JS.
+Solution: Use st.context.headers to read the User-Agent server-side (no JS,
+no iframes, no redirects). Falls back gracefully → desktop layout.
 """
 import streamlit as st
-import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="TrafficSense AI",
@@ -25,76 +25,35 @@ for k, v in [
     ("live_result",    None),
     ("freeze",         False),
     ("sparkline",      []),
-    ("is_mobile",      None),   # None = not yet detected
+    ("is_mobile",      None),
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ── Device detection ───────────────────────────────────────────────────────────
-# FIX: Use st.components.v1.html() — the ONLY way to run JS in Streamlit.
-# st.markdown() strips all <script> tags regardless of unsafe_allow_html=True.
-
-params = st.query_params
+# ── Device detection via User-Agent (server-side, no JS required) ──────────────
+def detect_mobile_from_ua() -> bool:
+    """Read User-Agent from request headers — works inside HF Spaces iframes."""
+    try:
+        headers = st.context.headers          # Streamlit >= 1.31
+        ua = headers.get("user-agent", "") or headers.get("User-Agent", "")
+        ua_lower = ua.lower()
+        mobile_keywords = ("mobile", "android", "iphone", "ipad", "ipod",
+                           "blackberry", "windows phone", "opera mini")
+        return any(kw in ua_lower for kw in mobile_keywords)
+    except Exception:
+        return False                          # safe fallback → desktop
 
 if st.session_state.is_mobile is None:
-    raw_w = params.get("w", None)
-    if raw_w is not None:
-        try:
-            w = int(raw_w)
-            st.session_state.is_mobile = (w <= 768)
-            st.query_params.clear()
-            st.rerun()
-        except ValueError:
-            st.session_state.is_mobile = False
-            st.rerun()
-    else:
-        # Show loading screen CSS via markdown (safe — no script tags)
-        st.markdown("""
-<style>
-html, body, [data-testid="stAppViewContainer"] { background: #080a10 !important; }
-/* Hide Streamlit chrome while loading */
-[data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
-</style>
-<div style="display:flex;align-items:center;justify-content:center;height:90vh;background:#080a10;">
-  <div style="text-align:center;">
-    <div style="font-size:48px;margin-bottom:16px;">🚦</div>
-    <div style="font-family:'Inter',sans-serif;font-size:16px;font-weight:600;color:#f0f0f0;">
-      TrafficSense<span style="color:#e24b4a;">AI</span>
-    </div>
-    <div style="font-size:12px;color:#4b5563;margin-top:8px;">Detecting device…</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+    st.session_state.is_mobile = detect_mobile_from_ua()
 
-        # ── THE ACTUAL FIX: components.html() executes JS ──────────────────
-        # Reads window.innerWidth and redirects with ?w= so Streamlit reruns.
-        components.html("""
-<!DOCTYPE html>
-<html>
-<body>
-<script>
-(function() {
-    var w = window.innerWidth ||
-            window.parent.innerWidth ||
-            screen.width ||
-            1024;                         // safe fallback
-
-    // Walk up to the top Streamlit frame to get the real URL
-    var targetWindow = window.parent || window;
-    var currentUrl = targetWindow.location.href;
-
-    var url = new URL(currentUrl);
-    url.searchParams.set('w', String(w));
-
-    // Navigate the parent frame (the actual Streamlit page)
-    targetWindow.location.href = url.toString();
-})();
-</script>
-</body>
-</html>
-""", height=0)          # height=0 → invisible iframe, no layout shift
-
-        st.stop()
+# ── Optional manual override in sidebar ───────────────────────────────────────
+with st.sidebar:
+    st.markdown("### ⚙️ Display")
+    current = "📱 Mobile" if st.session_state.is_mobile else "🖥️ Desktop"
+    st.caption(f"Detected: **{current}**")
+    if st.button("Switch to " + ("🖥️ Desktop" if st.session_state.is_mobile else "📱 Mobile")):
+        st.session_state.is_mobile = not st.session_state.is_mobile
+        st.rerun()
 
 # ── Load models (shared) ───────────────────────────────────────────────────────
 from shared import load_models, load_all_labels
@@ -114,7 +73,6 @@ if not mok:
 
 # ── Route to correct layout ────────────────────────────────────────────────────
 if st.session_state.is_mobile:
-    # ── MOBILE ──────────────────────────────────────────────────────────────
     import mobile_ui as ui
     st.markdown(ui.MOBILE_CSS, unsafe_allow_html=True)
     ui.render_navbar(mk, both_ok)
@@ -131,7 +89,6 @@ if st.session_state.is_mobile:
     ui.render_bottom_nav(tab)
 
 else:
-    # ── DESKTOP ──────────────────────────────────────────────────────────────
     import desktop_ui as ui
     st.markdown(ui.DESKTOP_CSS, unsafe_allow_html=True)
     ui.render_navbar(mk, both_ok)
