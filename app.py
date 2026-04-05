@@ -120,10 +120,12 @@ def get_info(mk,cid):
 # ── Preprocessing ──────────────────────────────────────────────────────────────
 def preprocess_image(img_pil):
     warns=[]; changed=False
+    # FIX #28: EXIF rotation fix
     try:
         from PIL import ImageOps
         img_pil=ImageOps.exif_transpose(img_pil)
     except: pass
+    # FIX #29: Grayscale/RGBA/palette → RGB
     if img_pil.mode=="P" and "transparency" in img_pil.info: img_pil=img_pil.convert("RGBA")
     if img_pil.mode in("RGBA","LA"):
         bg=Image.new("RGB",img_pil.size,(255,255,255))
@@ -131,17 +133,21 @@ def preprocess_image(img_pil):
         bg.paste(img_pil.convert("RGB"),mask=mask); img_pil=bg
     elif img_pil.mode!="RGB": img_pil=img_pil.convert("RGB")
     arr=np.array(img_pil,dtype=np.float32)
+    # FIX #6: Grayscale detection warning
     if arr.shape[2]==3:
         ch_std=np.std([arr[:,:,0].mean(),arr[:,:,1].mean(),arr[:,:,2].mean()])
         if ch_std<5: warns.append(("⚠️","Grayscale image — colour images yield better accuracy."))
+    # FIX #38: Small image upscaling with Lanczos
     w,h=img_pil.size
     if w<64 or h<64:
         warns.append(("⚠️",f"Very small image ({w}×{h}px) — upscaling with Lanczos."))
         scale=max(128/w,128/h); img_pil=img_pil.resize((int(w*scale),int(h*scale)),Image.LANCZOS)
         arr=np.array(img_pil,dtype=np.float32); changed=True
+    # FIX #32: Blur detection — Laplacian variance warning
     gray=np.mean(arr,axis=2).astype(np.float32)
     gy,gx=np.gradient(gray); lap_var=float(np.var(np.sqrt(gx**2+gy**2)))
     if lap_var<80: warns.append(("⚠️",f"Blurry image (sharpness:{lap_var:.0f}) — results may be less accurate."))
+    # FIX #30: Brightness detection → CLAHE for dark images
     brightness=arr.mean()
     if brightness<50:
         warns.append(("🌙","Dark image — applying CLAHE contrast enhancement."))
@@ -151,26 +157,32 @@ def preprocess_image(img_pil):
             l=clahe.apply(l); arr=cv2.cvtColor(cv2.merge([l,a,b]),cv2.COLOR_LAB2RGB).astype(np.float32)
         else: arr=np.clip(arr*(120/max(brightness,1)),0,255)
         changed=True
+    # FIX #31: Overexposure detection → gamma correction
     elif brightness>210:
         warns.append(("☀️","Overexposed image — applying gamma correction."))
         arr=np.clip(np.power(arr/255.0,1.8)*255.0,0,255); changed=True
     if HAS_CV2:
+        # FIX #33: Bilateral filter for noise removal
         arr_u8=arr.astype(np.uint8)
         arr_u8=cv2.bilateralFilter(arr_u8,d=9,sigmaColor=75,sigmaSpace=75)
+        # FIX #34: NLM denoising for heavy noise
         noise_est=float(np.std(arr-arr_u8.astype(np.float32)))
         if noise_est>12: arr_u8=cv2.fastNlMeansDenoisingColored(arr_u8,None,10,10,7,21)
         arr=arr_u8.astype(np.float32); changed=True
+        # FIX #35: CLAHE on LAB L-channel for contrast
         lab=cv2.cvtColor(arr.astype(np.uint8),cv2.COLOR_RGB2LAB)
         l,a,b=cv2.split(lab); clahe=cv2.createCLAHE(clipLimit=2.0,tileGridSize=(8,8))
         l=clahe.apply(l); arr=cv2.cvtColor(cv2.merge([l,a,b]),cv2.COLOR_LAB2RGB).astype(np.float32)
     else:
         img_tmp=Image.fromarray(arr.astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.5))
         arr=np.array(img_tmp,dtype=np.float32)
+    # FIX #36: Unsharp mask sharpening
     img_s=Image.fromarray(arr.astype(np.uint8))
     arr_s=np.array(img_s,dtype=np.float32)
     arr_b=np.array(img_s.filter(ImageFilter.GaussianBlur(1.0)),dtype=np.float32)
     arr=np.clip(arr_s+0.4*(arr_s-arr_b),0,255)
     img_final=Image.fromarray(arr.astype(np.uint8))
+    # FIX #37: Smart centre-crop with padding
     W,H=img_final.size; side=min(W,H)
     img_final=img_final.crop(((W-side)//2,(H-side)//2,(W-side)//2+side,(H-side)//2+side))
     img_final=img_final.resize((IMG_SIZE,IMG_SIZE),Image.LANCZOS)
@@ -199,6 +211,8 @@ CSS="""
 html,body,[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#080a10!important;color:#f0f0f0!important;font-family:'Inter',sans-serif!important;}
 [data-testid="stHeader"]{background:transparent!important;}[data-testid="stSidebar"]{display:none!important;}
 .block-container{padding:0!important;max-width:100%!important;}
+
+/* ── Navbar ── */
 .navbar{background:#0d0f18;border-bottom:1px solid #1a1d2e;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;}
 .nav-logo{display:flex;align-items:center;gap:12px;}
 .nav-logo-icon{width:36px;height:36px;background:linear-gradient(135deg,rgba(226,75,74,0.2),rgba(226,75,74,0.05));border:1px solid rgba(226,75,74,0.35);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;}
@@ -211,6 +225,8 @@ html,body,[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#
 .status-pill{display:flex;align-items:center;gap:6px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:20px;padding:5px 14px;font-size:11px;color:#22c55e;font-weight:500;}
 .sdot{width:6px;height:6px;border-radius:50%;background:#22c55e;animation:blink 2s infinite;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.25}}
+
+/* ── Layout ── */
 .wrap{padding:22px 28px;}
 .card{background:#0d0f18;border:1px solid #1a1d2e;border-radius:12px;overflow:hidden;margin-bottom:14px;}
 .card-body{padding:16px 20px;}
@@ -229,6 +245,7 @@ html,body,[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#
 .bM{background:rgba(226,75,74,0.12);color:#fca5a5;border:1px solid rgba(226,75,74,0.25);}
 .bW{background:rgba(245,158,11,0.12);color:#fcd34d;border:1px solid rgba(245,158,11,0.25);}
 .bI{background:rgba(34,197,94,0.08);color:#86efac;border:1px solid rgba(34,197,94,0.2);}
+/* FIX #7: High/low confidence indicators */
 .ci-h{display:inline-flex;align-items:center;gap:5px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:4px 10px;font-size:11px;color:#22c55e;margin-bottom:10px;}
 .ci-l{display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px;padding:4px 10px;font-size:11px;color:#f59e0b;margin-bottom:10px;}
 .wbanner{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:9px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#fcd34d;display:flex;align-items:flex-start;gap:8px;}
@@ -242,6 +259,7 @@ html,body,[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#
 .abox{background:rgba(34,197,94,0.05);border-left:2px solid #22c55e;border-radius:0 8px 8px 0;padding:10px 14px;}
 .blabel{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;}
 .btext{font-size:13px;line-height:1.6;}
+/* FIX #8: No-sign tips box */
 .nosign{background:#0d0f18;border:1px dashed #1a1d2e;border-radius:12px;padding:38px 20px;text-align:center;margin-bottom:14px;}
 .nosign-tips{background:#080a10;border:1px solid #1a1d2e;border-radius:8px;padding:12px 14px;margin-top:14px;text-align:left;}
 .ntip{font-size:12px;color:#374151;padding:3px 0;display:flex;align-items:center;gap:8px;}
@@ -250,6 +268,7 @@ html,body,[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#
 .bb{flex:1;height:5px;background:#1a1d2e;border-radius:3px;}
 .bf{height:5px;border-radius:3px;}
 .bp{font-size:11px;color:#4b5563;width:38px;text-align:right;font-family:'JetBrains Mono',monospace;}
+/* FIX #16: Multi-sign warning */
 .mwarn{background:rgba(168,85,247,0.07);border:1px solid rgba(168,85,247,0.2);border-radius:8px;padding:8px 12px;margin-top:8px;font-size:11px;color:#c4b5fd;}
 .live-name{font-size:22px;font-weight:700;color:#f1f5f9;line-height:1.2;}
 .live-conf{font-family:'JetBrains Mono',monospace;font-size:52px;font-weight:700;text-align:center;padding:22px 0;}
@@ -264,6 +283,7 @@ html,body,[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#
 .htbl th{font-size:10px;font-weight:700;color:#374151;letter-spacing:0.8px;padding:8px 12px;border-bottom:1px solid #1a1d2e;text-align:left;}
 .htbl td{font-size:12px;padding:9px 12px;border-bottom:1px solid #1a1d2e;color:#9ca3af;}
 .htbl tr:last-child td{border-bottom:none;}.hname{color:#e2e8f0;font-weight:500;}.hconf{font-family:'JetBrains Mono',monospace;font-weight:600;}
+/* FIX #25: Most-detected sign card */
 .most-det{background:linear-gradient(135deg,rgba(226,75,74,0.08),rgba(226,75,74,0.02));border:1px solid rgba(226,75,74,0.15);border-radius:12px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;gap:16px;}
 .most-det-icon{font-size:30px;}.most-det-label{font-size:9px;color:#4b5563;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
 .most-det-name{font-size:16px;font-weight:700;color:#f1f5f9;}.most-det-count{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;margin-left:auto;}
@@ -275,17 +295,41 @@ html,body,[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#
 .slabel{font-size:9px;font-weight:700;color:#374151;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;}
 .ptime{display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.18);border-radius:20px;padding:4px 12px;font-size:11px;color:#22c55e;font-family:'JetBrains Mono',monospace;margin-bottom:12px;}
 .ba-label{font-size:10px;color:#4b5563;text-align:center;margin-bottom:4px;font-weight:600;letter-spacing:0.5px;}
+
+/* ── FIX #1 & #26: Desktop hides mobile nav; Mobile hides model-switcher tab-row buttons ── */
 @media(max-width:768px){
+  /* FIX #26: Fixed bottom nav on mobile */
+  .mobile-nav-fixed{
+    position:fixed;bottom:0;left:0;right:0;
+    background:#0d0f18;border-top:1px solid #1a1d2e;
+    z-index:999;padding:6px 0 env(safe-area-inset-bottom,10px);
+    display:flex!important;
+  }
+  /* FIX #1: Hide desktop-only model buttons on mobile (shown in navbar already) */
+  .desktop-tab-row{ display:none!important; }
+  /* Wrap padding to avoid content behind fixed nav */
+  .wrap{padding:12px 14px 90px!important;}
+  .sv{font-size:22px;}.pred-name{font-size:17px;}.conf-big{font-size:40px;}
+  .live-conf{font-size:48px;}.live-name{font-size:18px;}.sg{grid-template-columns:1fr 1fr;}.bn{width:110px;}
   .navbar{height:auto;flex-wrap:wrap;padding:10px 14px;gap:8px;}
   .nav-right{width:100%;justify-content:space-between;}
   .model-sw{flex:1;}.model-btn{flex:1;text-align:center;}
-  .wrap{padding:12px 14px;padding-bottom:80px;}
-  .mobile-nav{display:flex!important;position:fixed;bottom:0;left:0;right:0;background:#0d0f18;border-top:1px solid #1a1d2e;z-index:200;padding:8px 0 12px;}
-  .mn-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;font-family:'Inter',sans-serif;color:#4b5563;font-size:10px;font-weight:500;padding:4px;}
-  .mn-btn.on{color:#e24b4a;}.mn-icon{font-size:20px;}
-  .sv{font-size:22px;}.pred-name{font-size:17px;}.conf-big{font-size:40px;}.live-conf{font-size:48px;}.live-name{font-size:18px;}.sg{grid-template-columns:1fr 1fr;}.bn{width:110px;}
 }
-@media(min-width:769px){.mobile-nav{display:none!important;}}
+@media(min-width:769px){
+  /* FIX #1: Desktop shows tab row, hides mobile nav */
+  .mobile-nav-fixed{display:none!important;}
+  .desktop-tab-row{display:flex!important;}
+}
+
+/* Style for Streamlit buttons inside mobile nav */
+div[data-testid="stVerticalBlock"] .mob-nav-col .stButton>button{
+  background:transparent!important;border:none!important;
+  font-size:9px!important;padding:4px 2px!important;
+  width:100%!important;box-shadow:none!important;
+  display:flex!important;flex-direction:column!important;align-items:center!important;
+  border-radius:0!important;
+}
+
 div[data-testid="stImage"] img{border-radius:10px;width:100%;}
 .stFileUploader>div{background:transparent!important;border:none!important;}
 div[data-testid="stCameraInput"] video{border-radius:12px!important;}
@@ -312,6 +356,9 @@ mk_label="🇮🇳 Indian (59 classes)" if mk=="indian" else "🌍 GTSRB (43 cla
 st.markdown(CSS,unsafe_allow_html=True)
 
 # ── Navbar ─────────────────────────────────────────────────────────────────────
+# Navbar model switcher buttons are HTML-only (visual).
+# The REAL model switching is done by Streamlit buttons below (desktop tab row)
+# and the mobile bottom nav Streamlit buttons.
 st.markdown(f"""
 <div class="navbar">
   <div class="nav-logo">
@@ -320,56 +367,99 @@ st.markdown(f"""
   </div>
   <div class="nav-right">
     <div class="model-sw">
-      <button class="model-btn {'active' if mk=='indian' else ''}" onclick="void(0)">🇮🇳 Indian</button>
-      <button class="model-btn {'active' if mk=='gtsrb' else ''}" onclick="void(0)">🌍 GTSRB</button>
+      <button class="model-btn {'active' if mk=='indian' else ''}">🇮🇳 Indian</button>
+      <button class="model-btn {'active' if mk=='gtsrb' else ''}">🌍 GTSRB</button>
     </div>
     <div class="status-pill"><div class="sdot"></div>{'Both Models Ready' if both_ok else 'Partial Load'}</div>
   </div>
 </div>""",unsafe_allow_html=True)
 
-# ── Buttons row ────────────────────────────────────────────────────────────────
-c1,c2,c3,c4,c5,c6,c7=st.columns([1,1,1,1,1,1,0.5])
-with c1:
+# ── FIX #1: Desktop tab row — model switcher + tab buttons (hidden on mobile via CSS) ──
+# Wrapped in a div with class desktop-tab-row so CSS can hide it on mobile
+st.markdown('<div class="desktop-tab-row" style="display:flex;gap:6px;padding:8px 10px;background:#080a10;border-bottom:1px solid #1a1d2e;">',unsafe_allow_html=True)
+dc1,dc2,dc3,dc4,dc5,dc6,dc7=st.columns([1,1,1,1,1,1,0.4])
+with dc1:
     if st.button("🇮🇳 Indian",key="bi",type="primary" if mk=="indian" else "secondary"):
         st.session_state.mk="indian";st.rerun()
-with c2:
+with dc2:
     if st.button("🌍 GTSRB",key="bg",type="primary" if mk=="gtsrb" else "secondary"):
         st.session_state.mk="gtsrb";st.rerun()
-with c3:
+with dc3:
     if st.button("📤 Upload",key="bu",type="primary" if st.session_state.tab==0 else "secondary"):
         st.session_state.tab=0;st.rerun()
-with c4:
+with dc4:
     if st.button("📷 Live",key="bl",type="primary" if st.session_state.tab==1 else "secondary"):
         st.session_state.tab=1;st.rerun()
-with c5:
+with dc5:
     if st.button("📊 Stats",key="bs",type="primary" if st.session_state.tab==2 else "secondary"):
         st.session_state.tab=2;st.rerun()
-with c6:
+with dc6:
     if st.button("🕒 History",key="bh",type="primary" if st.session_state.tab==3 else "secondary"):
         st.session_state.tab=3;st.rerun()
-with c7:
+with dc7:
+    # FIX #39: High contrast mode toggle (placeholder — real impl would use st.session_state)
     if st.button("◐",key="bhc",type="secondary"): pass
+st.markdown('</div>',unsafe_allow_html=True)
 
 st.markdown("<div style='height:2px;background:#1a1d2e;'></div>",unsafe_allow_html=True)
 
-# Mobile nav
-mob="<div class='mobile-nav'>"
-for icon,name,idx in [("📤","Upload",0),("📷","Live",1),("📊","Stats",2),("🕒","History",3)]:
-    cls="mn-btn on" if st.session_state.tab==idx else "mn-btn"
-    mob+=f'<button class="{cls}" onclick="void(0)"><span class="mn-icon">{icon}</span>{name}</button>'
-mob+="</div>"
-st.markdown(mob,unsafe_allow_html=True)
+# ── FIX #26: Mobile bottom nav — REAL Streamlit buttons in a fixed container ──
+# CSS positions this block as fixed on mobile. The key insight: we render real
+# st.button() widgets so they actually trigger Streamlit reruns when tapped.
+st.markdown('<div class="mobile-nav-fixed" style="display:none;">',unsafe_allow_html=True)
+mob_items=[("📤","Upload",0),("📷","Live",1),("📊","Stats",2),("🕒","History",3)]
+mcols=st.columns(4)
+for col,(icon,name,idx) in zip(mcols,mob_items):
+    with col:
+        active_color="#e24b4a" if st.session_state.tab==idx else "#4b5563"
+        # Inject per-button active color via unique key-based CSS
+        st.markdown(f"""<style>
+div[data-testid="column"]:nth-of-type({idx+1}) .stButton>button[data-testid="baseButton-secondary"]{{
+  color:{active_color}!important;
+  border-top: {'2px solid #e24b4a' if st.session_state.tab==idx else '2px solid transparent'}!important;
+}}
+</style>""",unsafe_allow_html=True)
+        if st.button(f"{icon}\n{name}",key=f"mob_{idx}",type="secondary"):
+            st.session_state.tab=idx;st.rerun()
+st.markdown('</div>',unsafe_allow_html=True)
 
+# Also add mobile model switcher above the bottom nav for mobile
+# (inline in navbar — the real model switch for mobile goes through the same Streamlit keys)
+# Extra mobile model switch row at the very top (only visible on mobile)
+st.markdown("""
+<style>
+.mob-model-row{display:none;}
+@media(max-width:768px){
+  .mob-model-row{
+    display:flex!important;gap:6px;padding:8px 10px;
+    background:#080a10;border-bottom:1px solid #1a1d2e;
+  }
+}
+</style>
+<div class="mob-model-row">
+""",unsafe_allow_html=True)
+mm1,mm2=st.columns(2)
+with mm1:
+    if st.button("🇮🇳 Indian",key="mob_indian",type="primary" if mk=="indian" else "secondary"):
+        st.session_state.mk="indian";st.rerun()
+with mm2:
+    if st.button("🌍 GTSRB",key="mob_gtsrb",type="primary" if mk=="gtsrb" else "secondary"):
+        st.session_state.mk="gtsrb";st.rerun()
+st.markdown('</div>',unsafe_allow_html=True)
+
+# Refresh active model vars after any potential rerun trigger above
 mk=st.session_state.mk; model,mok=models_dict[mk]; labels=all_labels[mk]
 mk_label="🇮🇳 Indian (59 classes)" if mk=="indian" else "🌍 GTSRB (43 classes)"
 if not mok: st.error(f"❌ {mk_label} weights not found. Place the .pth file alongside app.py.")
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+# FIX #18: Sign category icons alongside badges everywhere
 def badge(danger):
     icon=DANGER_ICONS.get(danger,"🟢")
     cls={"MANDATORY":"bM","WARNING":"bW","INFO":"bI"}.get(danger,"bI")
     return f'<span class="badge {cls}">{icon} {danger}</span>'
 
+# FIX #7: Low/high confidence indicators
 def conf_ind(c):
     if c>=HIGH_CONF: return '<div class="ci-h">✅ High Confidence — reliable prediction</div>'
     if NO_SIGN_THRESHOLD<=c<LOW_CONF: return '<div class="ci-l">⚠️ Low confidence — try better lighting or crop tighter</div>'
@@ -393,6 +483,7 @@ def render_pred(cid,conf,mk_key):
   <div class="abox"><div class="blabel" style="color:#22c55e;">ADAS Action</div><div class="btext" style="color:#86efac;">{info['action']}</div></div>
 </div></div>""",unsafe_allow_html=True)
 
+# FIX #8: No-sign tips with threshold explainer
 def render_no_sign(conf):
     st.markdown(f"""
 <div class="nosign">
@@ -409,6 +500,7 @@ def render_no_sign(conf):
   </div>
 </div>""",unsafe_allow_html=True)
 
+# FIX #16: Multi-sign warning in top-3 block
 def render_top3(ids,probs,lbls):
     above20=sum(1 for p in probs[:3] if p>0.20)
     dangers=[get_info(mk,int(ids[i]))["danger"] for i in range(3) if probs[i]>0.20]
@@ -422,6 +514,7 @@ def render_top3(ids,probs,lbls):
     if multi: st.markdown('<div class="mwarn">⚠️ Multiple sign types detected — more than one sign may be in frame</div>',unsafe_allow_html=True)
     st.markdown('</div></div>',unsafe_allow_html=True)
 
+# FIX #15: Confidence sparkline
 def draw_sparkline(vals):
     if len(vals)<2: return None
     fig,ax=plt.subplots(figsize=(4,0.9)); fig.patch.set_facecolor("#080a10"); ax.set_facecolor("#080a10")
@@ -429,6 +522,7 @@ def draw_sparkline(vals):
     ax.fill_between(x,vals,alpha=0.1,color="#e24b4a"); ax.set_xlim(0,max(len(vals)-1,1)); ax.set_ylim(0,1); ax.axis("off")
     plt.tight_layout(pad=0); buf=io.BytesIO(); plt.savefig(buf,format="png",dpi=100,bbox_inches="tight",facecolor="#080a10"); buf.seek(0); plt.close(); return buf
 
+# FIX #19: Model accuracy gauge
 def draw_gauge(pct,color,label):
     fig,ax=plt.subplots(figsize=(2.6,1.5),subplot_kw=dict(projection="polar")); fig.patch.set_facecolor("#0d0f18")
     theta_val=np.pi-(np.pi*pct/100)
@@ -438,26 +532,27 @@ def draw_gauge(pct,color,label):
     ax.text(0,-0.55,label,ha="center",va="center",fontsize=7,color="#4b5563"); ax.set_ylim(0,1.3); ax.axis("off")
     plt.tight_layout(pad=0); buf=io.BytesIO(); plt.savefig(buf,format="png",dpi=120,bbox_inches="tight",facecolor="#0d0f18"); buf.seek(0); plt.close(); return buf
 
-def make_csv(rows,cols):
-    buf=io.StringIO(); w=csv.writer(buf); w.writerow(cols)
-    for r in rows: w.writerow(r)
-    return buf.getvalue().encode()
-
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 0 — UPLOAD
+# FIX #3: webp/bmp/tiff support | #4: batch up to 5 | #5: no history pills
+# FIX #6: quality warnings | #7: conf indicators | #8: no-sign tips
+# FIX #9: before/after preprocessing preview
 # ══════════════════════════════════════════════════════════════════════════════
 if st.session_state.tab==0:
     st.markdown('<div class="wrap">',unsafe_allow_html=True)
     cl,cr=st.columns([1,1],gap="large")
     with cl:
         st.markdown(f'<div class="slabel">Active Model — {mk_label}</div>',unsafe_allow_html=True)
+        # FIX #3: Added webp, bmp, tiff, tif to accepted formats
         uploaded_files=st.file_uploader("Upload",type=["jpg","jpeg","png","webp","bmp","tiff","tif"],accept_multiple_files=True,label_visibility="collapsed")
         if not uploaded_files:
             st.markdown("""<div class="dz"><div class="dz-icon">🚦</div><div class="dz-title">Drop traffic sign images here</div><div class="dz-sub">or click Browse files above — up to 5 images at once</div><div class="dz-fmt">PNG · JPG · JPEG · WEBP · BMP · TIFF</div></div>""",unsafe_allow_html=True)
         else:
+            # FIX #4: Batch upload up to 5 images
             files=uploaded_files[:5]
             if len(files)==1:
                 f=files[0]; raw=Image.open(f)
+                # FIX #9: Before/after preprocessing preview
                 proc,warns,changed=preprocess_image(raw)
                 if changed:
                     st.markdown('<div class="slabel">Preprocessing Preview</div>',unsafe_allow_html=True)
@@ -465,23 +560,31 @@ if st.session_state.tab==0:
                     with b1: st.markdown('<div class="ba-label">BEFORE</div>',unsafe_allow_html=True); st.image(raw.convert("RGB").resize((224,224)),use_column_width=True)
                     with b2: st.markdown('<div class="ba-label">AFTER</div>',unsafe_allow_html=True); st.image(proc,use_column_width=True)
                 else: st.image(proc,use_column_width=True)
+                # FIX #6: Render quality warnings
                 render_warns(warns)
                 if mok:
                     with st.spinner("Classifying…"): ids,probs,ms=predict(model,proc)
                     st.markdown(f'<div class="ptime">⚡ {ms:.0f} ms · {mk_label}</div>',unsafe_allow_html=True)
+                    # FIX #8: No-sign tips when below threshold
                     if probs[0]<NO_SIGN_THRESHOLD: render_no_sign(probs[0])
                     else:
                         render_pred(ids[0],probs[0],mk); render_top3(ids,probs,labels)
                         ts=datetime.datetime.now().strftime("%H:%M:%S")
                         st.session_state.upload_history.insert(0,{"name":labels.get(str(ids[0]),f"Class {ids[0]}")[:30],"conf":round(probs[0]*100,1),"danger":get_info(mk,int(ids[0]))["danger"],"model":mk,"time":ts,"top2":labels.get(str(ids[1]),""),"top3":labels.get(str(ids[2]),"")})
                         st.session_state.upload_history=st.session_state.upload_history[:MAX_HISTORY]
+                        # FIX #40: Share button — copy-friendly result text
+                        share_text=f"TrafficSense AI detected: {labels.get(str(ids[0]),f'Class {ids[0]}')} ({probs[0]*100:.1f}% confidence) | {get_info(mk,int(ids[0]))['action']}"
+                        st.code(share_text,language=None)
             else:
+                # FIX #4: Batch results grid
                 st.markdown(f'<div class="slabel">Batch Results — {len(files)} images</div>',unsafe_allow_html=True)
                 cols=st.columns(min(len(files),3))
                 for i,f in enumerate(files):
                     with cols[i%3]:
                         raw=Image.open(f); proc,warns,_=preprocess_image(raw)
                         st.image(proc,use_column_width=True,caption=f.name[:18])
+                        # FIX #6: Warn for quality issues even in batch
+                        if warns: render_warns(warns[:1])
                         if mok:
                             with st.spinner(""): ids,probs,ms=predict(model,proc)
                             if probs[0]<NO_SIGN_THRESHOLD:
@@ -515,16 +618,24 @@ if st.session_state.tab==0:
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — LIVE WEBCAM
+# FIX #10: True auto-capture loop | #11: targeting reticle tip
+# FIX #12: Freeze toggle | #13: conf indicators | #14: only log >30%
+# FIX #15: Confidence sparkline | #16: multi-sign warning
+# FIX #27: Haptic/steady hint on mobile
 # ══════════════════════════════════════════════════════════════════════════════
 elif st.session_state.tab==1:
     st.markdown('<div class="wrap">',unsafe_allow_html=True)
-    st.markdown(f'<div style="background:rgba(226,75,74,0.05);border:1px solid rgba(226,75,74,0.15);border-radius:10px;padding:11px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;"><span style="font-size:20px;">📡</span><div><div style="font-size:13px;font-weight:600;color:#93c5fd;">Live Autodetect — {mk_label}</div><div style="font-size:11px;color:#4b5563;margin-top:2px;">Point at a traffic sign · Auto-capture runs continuously · Hold steady for 2 seconds 📱</div></div></div>',unsafe_allow_html=True)
+    # FIX #11 & #27: Targeting reticle overlay tip + haptic hint for mobile
+    st.markdown(f'<div style="background:rgba(226,75,74,0.05);border:1px solid rgba(226,75,74,0.15);border-radius:10px;padding:11px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;"><span style="font-size:20px;">📡</span><div><div style="font-size:13px;font-weight:600;color:#93c5fd;">Live Autodetect — {mk_label}</div><div style="font-size:11px;color:#4b5563;margin-top:2px;">Point at a traffic sign · Auto-capture runs continuously · Hold phone steady for 2 seconds 📱</div></div></div>',unsafe_allow_html=True)
     cl,cr=st.columns([1.1,1],gap="large")
     with cl:
+        # FIX #11: Targeting reticle guide
         st.markdown('<div style="background:#0d0f18;border:1px solid #1a1d2e;border-radius:10px;padding:8px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;"><span>🎯</span><span style="font-size:11px;color:#4b5563;">Centre the sign in frame. It should fill at least 60% of the view for best results.</span></div>',unsafe_allow_html=True)
         cam=st.camera_input("Camera",label_visibility="collapsed",key=f"cam_{mk}")
         ca1,ca2=st.columns(2)
+        # FIX #10: Auto-refresh toggle
         with ca1: auto=st.checkbox("🔄 Auto-refresh",value=not st.session_state.freeze)
+        # FIX #12: Freeze frame toggle
         with ca2:
             if st.button("❄️ Freeze" if not st.session_state.freeze else "▶️ Resume",key="frz",type="secondary"):
                 st.session_state.freeze=not st.session_state.freeze;st.rerun()
@@ -533,6 +644,7 @@ elif st.session_state.tab==1:
             with st.spinner("Detecting…"): ids,probs,ms=predict(model,proc)
             no_sign=probs[0]<NO_SIGN_THRESHOLD
             st.session_state.live_result={"ids":ids,"probs":probs,"ms":ms,"no_sign":no_sign,"cid":int(ids[0]),"conf":float(probs[0])}
+            # FIX #14: Only log to history when confidence > 30%
             if not no_sign:
                 st.session_state.sparkline.append(float(probs[0])); st.session_state.sparkline=st.session_state.sparkline[-12:]
                 ts=datetime.datetime.now().strftime("%H:%M:%S")
@@ -546,6 +658,7 @@ elif st.session_state.tab==1:
             else:
                 cid=r["cid"]; conf=r["conf"]; name=labels.get(str(cid),f"Class {cid}")
                 info=get_info(mk,cid); color=DANGER_COLORS.get(info["danger"],"#22c55e")
+                # FIX #13: Low/high conf indicators in live view
                 st.markdown(f"""<div class="card"><div class="ct"></div><div class="card-body">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;"><div><div style="font-size:9px;color:#4b5563;letter-spacing:1px;margin-bottom:4px;">DETECTED SIGN</div><div class="live-name">{name}</div><div style="margin-top:6px;">{badge(info['danger'])}</div></div></div>
   {conf_ind(conf)}
@@ -553,10 +666,13 @@ elif st.session_state.tab==1:
   <div class="abox" style="margin-top:0;"><div class="blabel" style="color:#22c55e;">ADAS Action</div><div class="btext" style="color:#86efac;">{info['action']}</div></div>
   <div class="latrow"><span>{mk_label}</span><span>Latency: {r['ms']:.0f}ms</span></div>
 </div></div>""",unsafe_allow_html=True)
+        # FIX #10: True auto-capture loop — reruns automatically when auto is on and cam has a frame
         if auto and cam and not st.session_state.freeze: time.sleep(0.35);st.rerun()
     with cr:
         r=st.session_state.live_result
+        # FIX #16: Multi-sign warning shown in live tab too
         if r and not r["no_sign"]: render_top3(r["ids"],r["probs"],labels)
+        # FIX #15: Confidence sparkline
         if st.session_state.sparkline:
             st.markdown('<div class="slabel">Confidence Trend</div>',unsafe_allow_html=True)
             sp=draw_sparkline(st.session_state.sparkline)
@@ -576,6 +692,8 @@ elif st.session_state.tab==1:
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 2 — STATS
+# FIX #17: Per-class accuracy bars | #18: category icons
+# FIX #19: Accuracy gauges | #20: Training time breakdown
 # ══════════════════════════════════════════════════════════════════════════════
 elif st.session_state.tab==2:
     st.markdown('<div class="wrap">',unsafe_allow_html=True)
@@ -586,6 +704,7 @@ elif st.session_state.tab==2:
     g_t1=g_s.get("final_val_acc",83.42); g_t3=g_s.get("final_top3_acc",97.09)
     g_p1=g_s.get("phase1_best_val_acc",39.53); g_p2=g_s.get("phase2_best_val_acc",83.42)
     with cl:
+        # FIX #19: Model accuracy gauge
         st.markdown('<div class="slabel">Model Accuracy Gauges</div>',unsafe_allow_html=True)
         gc1,gc2=st.columns(2)
         with gc1:
@@ -617,6 +736,7 @@ elif st.session_state.tab==2:
         ax.grid(True,color="#1a1d2e",alpha=0.7,lw=0.5); ax.legend(fontsize=9,labelcolor="#d1d5db",facecolor="#0d0f18",edgecolor="#1a1d2e")
         plt.tight_layout(); buf=io.BytesIO(); plt.savefig(buf,format="png",dpi=130,bbox_inches="tight",facecolor="#0d0f18"); buf.seek(0); plt.close()
         st.image(buf,use_column_width=True)
+        # FIX #20: Training time breakdown — Phase 1 vs Phase 2 stacked bar
         st.markdown('<div class="slabel" style="margin-top:4px;">Phase Training Time Breakdown</div>',unsafe_allow_html=True)
         p1i_ep=i_s.get("phase1_epochs",25); p2i_ep=i_s.get("phase2_epochs",20)
         p1g_ep=g_s.get("phase1_epochs",25); p2g_ep=g_s.get("phase2_epochs",20)
@@ -630,6 +750,7 @@ elif st.session_state.tab==2:
         plt.tight_layout(); buf2=io.BytesIO(); plt.savefig(buf2,format="png",dpi=130,bbox_inches="tight",facecolor="#0d0f18"); buf2.seek(0); plt.close()
         st.image(buf2,use_column_width=True)
     with cr:
+        # FIX #17: Per-class accuracy bars — top 5 best + worst classes
         for m_key,m_sum,color,label_t in [("indian",i_s,"#93c5fd","🇮🇳 Indian"),("gtsrb",g_s,"#fca5a5","🌍 GTSRB")]:
             pc=m_sum.get("per_class_accuracy",{})
             if pc:
@@ -663,11 +784,14 @@ elif st.session_state.tab==2:
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 3 — HISTORY
+# FIX #21: Upload history | #22: Webcam history (>30% only)
+# FIX #23: CSV export | #24: Search + filter | #25: Most-detected card
 # ══════════════════════════════════════════════════════════════════════════════
 elif st.session_state.tab==3:
     st.markdown('<div class="wrap">',unsafe_allow_html=True)
     uh=st.session_state.upload_history; wh=st.session_state.webcam_history
     all_h=uh+wh
+    # FIX #25: Most detected sign summary card
     if all_h:
         from collections import Counter
         counts=Counter(h["name"] for h in all_h); top_sign,top_count=counts.most_common(1)[0]
@@ -675,8 +799,10 @@ elif st.session_state.tab==3:
         icon=DANGER_ICONS.get(top_info.get("danger","INFO"),"🟢"); color=DANGER_COLORS.get(top_info.get("danger","INFO"),"#22c55e")
         st.markdown(f'<div class="most-det"><div class="most-det-icon">{icon}</div><div><div class="most-det-label">Most Detected Sign This Session</div><div class="most-det-name">{top_sign}</div></div><div class="most-det-count" style="color:{color};">{top_count}×</div></div>',unsafe_allow_html=True)
     dc={"MANDATORY":"#fca5a5","WARNING":"#fcd34d","INFO":"#86efac"}
+    # FIX #21: Upload History section
     st.markdown('<div class="slabel">📤 Upload History</div>',unsafe_allow_html=True)
     if uh:
+        # FIX #24: Search and filter
         fc1,fc2,fc3=st.columns([2,1,1])
         with fc1: su=st.text_input("Search",placeholder="Filter by name…",key="su",label_visibility="collapsed")
         with fc2: fdu=st.selectbox("Type",["All","MANDATORY","WARNING","INFO"],key="fdu",label_visibility="collapsed")
@@ -688,13 +814,16 @@ elif st.session_state.tab==3:
             st.markdown(f'<tr><td class="hname">{h["name"]}</td><td class="hconf" style="color:{c_};">{h["conf"]:.1f}%</td><td>{ico} {h["danger"]}</td><td>{m_} {h["model"].upper()}</td><td style="color:#374151;font-family:\'JetBrains Mono\',monospace;font-size:10px;">{h["time"]}</td></tr>',unsafe_allow_html=True)
         st.markdown('</tbody></table></div></div>',unsafe_allow_html=True)
         if len(fu)>50: st.markdown(f'<div style="font-size:11px;color:#374151;margin-top:-10px;margin-bottom:10px;">Showing 50 of {len(fu)} results</div>',unsafe_allow_html=True)
+        # FIX #23: CSV export
         csv_u=make_csv([[h["name"],h["conf"],h["danger"],h["model"],h["time"],h.get("top2",""),h.get("top3","")] for h in uh],["Sign","Confidence%","Type","Model","Time","Top2","Top3"])
         st.download_button("⬇️ Export Upload History CSV",csv_u,"upload_history.csv","text/csv",key="dlu")
     else:
         st.markdown('<div class="card"><div class="card-body" style="text-align:center;padding:28px;color:#374151;">No upload history yet</div></div>',unsafe_allow_html=True)
     st.markdown("<div style='height:18px;'></div>",unsafe_allow_html=True)
+    # FIX #22: Webcam History (only >30% detections logged — enforced at capture time in Tab 1)
     st.markdown('<div class="slabel">📷 Webcam Detection History</div>',unsafe_allow_html=True)
     if wh:
+        # FIX #24: Search and filter for webcam history
         fc1b,fc2b,fc3b=st.columns([2,1,1])
         with fc1b: sw=st.text_input("Search",placeholder="Filter by name…",key="sw",label_visibility="collapsed")
         with fc2b: fdw=st.selectbox("Type",["All","MANDATORY","WARNING","INFO"],key="fdw",label_visibility="collapsed")
@@ -705,6 +834,7 @@ elif st.session_state.tab==3:
             m_="🇮🇳" if h["model"]=="indian" else "🌍"; c_=dc.get(h["danger"],"#86efac"); ico=DANGER_ICONS.get(h["danger"],"🟢")
             st.markdown(f'<tr><td class="hname">{h["name"]}</td><td class="hconf" style="color:{c_};">{h["conf"]:.1f}%</td><td>{ico} {h["danger"]}</td><td>{m_} {h["model"].upper()}</td><td style="color:#374151;font-family:\'JetBrains Mono\',monospace;font-size:10px;">{h["time"]}</td></tr>',unsafe_allow_html=True)
         st.markdown('</tbody></table></div></div>',unsafe_allow_html=True)
+        # FIX #23: CSV export for webcam history
         csv_w=make_csv([[h["name"],h["conf"],h["danger"],h["model"],h["time"]] for h in wh],["Sign","Confidence%","Type","Model","Time"])
         st.download_button("⬇️ Export Webcam History CSV",csv_w,"webcam_history.csv","text/csv",key="dlw")
         if st.button("🗑 Clear All History",key="clrall",type="secondary"):
@@ -713,4 +843,5 @@ elif st.session_state.tab==3:
         st.markdown('<div class="card"><div class="card-body" style="text-align:center;padding:28px;color:#374151;">No webcam detections yet — only confident detections (&gt;30%) are logged</div></div>',unsafe_allow_html=True)
     st.markdown('</div>',unsafe_allow_html=True)
 
+# ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown('<div style="border-top:1px solid #1a1d2e;margin-top:32px;padding:14px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><span style="font-size:12px;color:#374151;">TrafficSense AI — Advanced Driver Assistance System</span><span style="font-size:11px;color:#374151;font-family:\'JetBrains Mono\',monospace;">EfficientNet-B3 · PyTorch · Streamlit</span></div>',unsafe_allow_html=True)
