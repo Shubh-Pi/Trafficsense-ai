@@ -1,9 +1,12 @@
 """
 mobile_ui.py — Mobile layout for TrafficSense AI
-FIX: Navbar model buttons and bottom nav rendered using st.columns()
-     with nuclear CSS override to force horizontal layout on HF Spaces mobile.
-     Key insight: target [data-testid="stColumn"] directly with flex overrides,
-     and use a wrapper sentinel class to scope the CSS precisely.
+
+ROOT CAUSE OF STACKING BUG:
+Streamlit sets flex-direction as an INLINE style on stHorizontalBlock elements.
+CSS !important in a <style> tag cannot override inline styles.
+SOLUTION: Use a MutationObserver in JS to forcibly patch inline styles
+on every stHorizontalBlock element after every Streamlit re-render.
+This runs continuously so it survives reruns.
 """
 import io as _io, datetime, time
 import numpy as np
@@ -18,33 +21,74 @@ from shared import (
     render_top3, draw_sparkline, draw_gauge, BASE_CSS
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# JS MutationObserver — patches Streamlit's inline flex styles after every render.
+# CSS !important cannot override inline styles; JS style.setProperty can.
+# ─────────────────────────────────────────────────────────────────────────────
+_FLEX_FIX_JS = """
+<script>
+(function forceHorizontalLayout() {
+  function patchAll() {
+    // 1. Force every stHorizontalBlock to be a real row
+    document.querySelectorAll('[data-testid="stHorizontalBlock"]').forEach(function(el) {
+      el.style.setProperty('flex-direction', 'row', 'important');
+      el.style.setProperty('flex-wrap', 'nowrap', 'important');
+      el.style.setProperty('align-items', 'stretch', 'important');
+      el.style.setProperty('width', '100%', 'important');
+      el.style.setProperty('gap', '6px', 'important');
+    });
+    // 2. Force every column child to share space equally
+    document.querySelectorAll('[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]').forEach(function(col) {
+      col.style.setProperty('flex', '1 1 0%', 'important');
+      col.style.setProperty('min-width', '0', 'important');
+      col.style.setProperty('width', 'auto', 'important');
+    });
+    // 3. Highlight active bottom nav button
+    var sentinel = document.querySelector('.bnav-sentinel');
+    if (sentinel) {
+      var activeIdx = parseInt(sentinel.getAttribute('data-active') || '0');
+      var wrap = document.querySelector('.bnav-wrap');
+      if (wrap) {
+        var cols = wrap.querySelectorAll('[data-testid="stColumn"]');
+        cols.forEach(function(col, i) {
+          var btn = col.querySelector('button');
+          if (!btn) return;
+          if (i === activeIdx) {
+            btn.style.setProperty('color', '#e24b4a', 'important');
+            btn.style.setProperty('border-top', '2px solid #e24b4a', 'important');
+          } else {
+            btn.style.setProperty('color', '#4b5563', 'important');
+            btn.style.setProperty('border-top', '2px solid transparent', 'important');
+          }
+        });
+      }
+    }
+  }
+
+  // Run immediately and after short delays to catch initial render
+  patchAll();
+  setTimeout(patchAll, 100);
+  setTimeout(patchAll, 300);
+  setTimeout(patchAll, 700);
+  setTimeout(patchAll, 1500);
+
+  // Watch for ANY DOM change and re-patch (handles Streamlit reruns)
+  var observer = new MutationObserver(function() { patchAll(); });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['style']
+  });
+})();
+</script>
+"""
+
 # ── Mobile CSS ─────────────────────────────────────────────────────────────────
 MOBILE_CSS = BASE_CSS + """
 <style>
-/* ══════════════════════════════════════════════════════
-   NUCLEAR FIX: Force ALL st.columns() rows to be truly
-   horizontal on mobile — HF Spaces collapses them to
-   column by default due to its iframe width constraints.
-   We target the stHorizontalBlock and force flex-direction.
-   ══════════════════════════════════════════════════════ */
+.nav-sub { display: none !important; }
 
-/* Force every horizontal block to actually be horizontal */
-[data-testid="stHorizontalBlock"] {
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  gap: 6px !important;
-  align-items: stretch !important;
-  width: 100% !important;
-}
-
-/* Force every column to shrink equally */
-[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-  flex: 1 1 0% !important;
-  min-width: 0 !important;
-  width: auto !important;
-}
-
-/* ── Navbar wrapper ── */
 .navbar {
   background: #0d0f18;
   border-bottom: 1px solid #1a1d2e;
@@ -53,7 +97,6 @@ MOBILE_CSS = BASE_CSS + """
   top: 0;
   z-index: 100;
 }
-
 .nav-top-row {
   display: flex;
   align-items: center;
@@ -61,21 +104,12 @@ MOBILE_CSS = BASE_CSS + """
   height: 44px;
   margin-bottom: 6px;
 }
-
-/* ── Model switcher buttons inside navbar ── */
-.model-btn-row [data-testid="stHorizontalBlock"] {
+.model-btn-row {
   background: #080a10;
   border-bottom: 1px solid #1a1d2e;
-  padding: 4px 12px 4px 12px !important;
-  margin: 0 -12px !important;
-  gap: 8px !important;
+  padding: 4px 12px;
+  margin: 0 -12px;
 }
-
-.model-btn-row [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-  flex: 1 1 0% !important;
-  min-width: 0 !important;
-}
-
 .model-btn-row .stButton > button {
   width: 100% !important;
   padding: 7px 4px !important;
@@ -86,7 +120,19 @@ MOBILE_CSS = BASE_CSS + """
   white-space: nowrap !important;
 }
 
-/* ── Bottom nav bar ── */
+.wrap { padding: 12px 12px 80px 12px !important; }
+
+.mob-page-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #374151;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 8px 0 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #1a1d2e;
+}
+
 .bnav-wrap {
   position: fixed !important;
   bottom: 0 !important;
@@ -95,22 +141,8 @@ MOBILE_CSS = BASE_CSS + """
   background: #0d0f18 !important;
   border-top: 1px solid #1a1d2e !important;
   z-index: 9999 !important;
-  padding: 2px 0 env(safe-area-inset-bottom, 4px) 0 !important;
+  padding: 0 0 env(safe-area-inset-bottom, 4px) 0 !important;
 }
-
-/* Scope the horizontal block INSIDE the nav wrapper */
-.bnav-wrap [data-testid="stHorizontalBlock"] {
-  gap: 0 !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-  border: none !important;
-}
-
-.bnav-wrap [data-testid="stColumn"] {
-  padding: 0 !important;
-}
-
 .bnav-wrap .stButton > button {
   background: transparent !important;
   border: none !important;
@@ -123,114 +155,32 @@ MOBILE_CSS = BASE_CSS + """
   border-radius: 0 !important;
   box-shadow: none !important;
   min-height: 46px !important;
-  line-height: 1.3 !important;
-  white-space: pre-line !important;
+  line-height: 1.4 !important;
 }
 
-.bnav-wrap .stButton > button:hover {
-  opacity: 1 !important;
-  background: transparent !important;
-}
-
-/* Active tab styling — injected via JS below */
-.bnav-active > button {
-  color: #e24b4a !important;
-  border-top: 2px solid #e24b4a !important;
-}
-
-/* ── Content area ── */
-.wrap {
-  padding: 12px 12px 80px 12px !important;
-}
-
-/* ── Page title ── */
-.mob-page-title {
-  font-size: 10px;
-  font-weight: 700;
-  color: #374151;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  padding: 8px 0 6px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid #1a1d2e;
-}
-
-/* ── Mobile font scaling ── */
+/* Mobile font scaling */
 .pred-name { font-size: 16px !important; }
 .conf-big  { font-size: 34px !important; }
 .live-conf { font-size: 42px !important; }
 .live-name { font-size: 16px !important; }
 .sv        { font-size: 22px !important; }
 .bn        { width: 110px !important; }
-
-/* ── Status pill compact ── */
-.status-pill {
-  padding: 4px 10px !important;
-  font-size: 10px !important;
-}
-
-/* ── Hide desktop-only nav parts ── */
-.nav-sub { display: none !important; }
+.status-pill { padding: 4px 10px !important; font-size: 10px !important; }
 </style>
-
-<script>
-/* After render: highlight the active bottom-nav button */
-(function highlightActiveNav() {
-  function doHighlight() {
-    const sentinel = document.querySelector('.bnav-sentinel');
-    if (!sentinel) { setTimeout(doHighlight, 200); return; }
-    const activeIdx = parseInt(sentinel.getAttribute('data-active') || '0');
-
-    /* Find the bnav-wrap div and get its column children */
-    const wrap = document.querySelector('.bnav-wrap');
-    if (!wrap) { setTimeout(doHighlight, 200); return; }
-    const cols = wrap.querySelectorAll('[data-testid="column"], [data-testid="stColumn"]');
-    cols.forEach((col, i) => {
-      const btn = col.querySelector('button');
-      if (!btn) return;
-      if (i === activeIdx) {
-        btn.style.color = '#e24b4a';
-        btn.style.borderTop = '2px solid #e24b4a';
-      } else {
-        btn.style.color = '#4b5563';
-        btn.style.borderTop = '2px solid transparent';
-      }
-    });
-  }
-  /* Run on load and after short delays to catch Streamlit re-renders */
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      doHighlight();
-      setTimeout(doHighlight, 400);
-      setTimeout(doHighlight, 900);
-    });
-  } else {
-    doHighlight();
-    setTimeout(doHighlight, 400);
-    setTimeout(doHighlight, 900);
-  }
-})();
-</script>
-"""
+""" + _FLEX_FIX_JS
 
 
 def render_navbar(mk, both_ok):
-    """
-    Navbar: HTML top row (logo + status), then real st.columns for model buttons.
-    The model buttons are wrapped in a .model-btn-row div for scoped CSS.
-    """
     status_color = "#22c55e" if both_ok else "#f59e0b"
-    status_text  = "Ready" if both_ok else "Partial"
+    status_text  = "Ready"  if both_ok else "Partial"
 
-    # Top logo row — pure HTML, no Streamlit widgets
+    # Pure HTML top row — no Streamlit widgets inside
     st.markdown(f"""
 <div class="navbar">
   <div class="nav-top-row">
     <div class="nav-logo">
       <div class="nav-logo-icon">🚦</div>
-      <div>
-        <div class="nav-brand">TrafficSense<span>AI</span></div>
-      </div>
+      <div><div class="nav-brand">TrafficSense<span>AI</span></div></div>
     </div>
     <div class="nav-right">
       <div class="status-pill">
@@ -243,54 +193,36 @@ def render_navbar(mk, both_ok):
 <div class="model-btn-row">
 """, unsafe_allow_html=True)
 
-    # Real Streamlit column buttons for model switching
+    # Real st.columns for model buttons — JS will force these horizontal
     c1, c2 = st.columns(2)
     with c1:
-        if st.button(
-            "🇮🇳 Indian", key="m_indian",
-            type="primary" if mk == "indian" else "secondary"
-        ):
-            st.session_state.mk = "indian"
-            st.rerun()
+        if st.button("🇮🇳 Indian", key="m_indian",
+                     type="primary" if mk == "indian" else "secondary"):
+            st.session_state.mk = "indian"; st.rerun()
     with c2:
-        if st.button(
-            "🌍 GTSRB", key="m_gtsrb",
-            type="primary" if mk == "gtsrb" else "secondary"
-        ):
-            st.session_state.mk = "gtsrb"
-            st.rerun()
+        if st.button("🌍 GTSRB", key="m_gtsrb",
+                     type="primary" if mk == "gtsrb" else "secondary"):
+            st.session_state.mk = "gtsrb"; st.rerun()
 
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_model_strip(mk):
-    """No-op — model switcher is now in render_navbar."""
-    pass
+    pass  # no-op — switcher is in render_navbar
 
 
 def render_bottom_nav(tab):
-    """
-    Fixed bottom nav bar with 4 tabs side-by-side.
-    Uses a wrapping div with class 'bnav-wrap' so CSS can scope it precisely.
-    JS highlights the active tab with a red top border.
-    """
-    # Sentinel carries active tab index for JS
     st.markdown(
         f'<div class="bnav-sentinel" data-active="{tab}" style="height:0;overflow:hidden;"></div>',
         unsafe_allow_html=True
     )
-
-    # Wrap the columns in a fixed-position div
     st.markdown('<div class="bnav-wrap">', unsafe_allow_html=True)
-
+    cols = st.columns(4)
     items = [("📤", "Upload", 0), ("📷", "Live", 1), ("📊", "Stats", 2), ("🕒", "History", 3)]
-    cols  = st.columns(4)
     for col, (icon, name, idx) in zip(cols, items):
         with col:
             if st.button(f"{icon}\n{name}", key=f"bnav_{idx}", type="secondary"):
-                st.session_state.tab = idx
-                st.rerun()
-
+                st.session_state.tab = idx; st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 
