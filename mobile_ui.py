@@ -1,12 +1,12 @@
 """
 mobile_ui.py — Mobile layout for TrafficSense AI
 
-ROOT CAUSE OF STACKING BUG:
-Streamlit sets flex-direction as an INLINE style on stHorizontalBlock elements.
-CSS !important in a <style> tag cannot override inline styles.
-SOLUTION: Use a MutationObserver in JS to forcibly patch inline styles
-on every stHorizontalBlock element after every Streamlit re-render.
-This runs continuously so it survives reruns.
+FIX: HF Spaces blocks inline <script> tags via CSP, so JS fixes don't run.
+st.columns() stacks vertically on HF Spaces mobile iframe.
+
+SOLUTION: Replace navbar model buttons AND bottom nav with pure HTML <a> links
+that set URL query params (?mk=indian, ?tab=1 etc). app.py reads these via
+st.query_params and updates session_state before rendering. No JS needed.
 """
 import io as _io, datetime, time
 import numpy as np
@@ -21,78 +21,16 @@ from shared import (
     render_top3, draw_sparkline, draw_gauge, BASE_CSS
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# JS MutationObserver — patches Streamlit's inline flex styles after every render.
-# CSS !important cannot override inline styles; JS style.setProperty can.
-# ─────────────────────────────────────────────────────────────────────────────
-_FLEX_FIX_JS = """
-<script>
-(function forceHorizontalLayout() {
-  function patchAll() {
-    // 1. Force every stHorizontalBlock to be a real row
-    document.querySelectorAll('[data-testid="stHorizontalBlock"]').forEach(function(el) {
-      el.style.setProperty('flex-direction', 'row', 'important');
-      el.style.setProperty('flex-wrap', 'nowrap', 'important');
-      el.style.setProperty('align-items', 'stretch', 'important');
-      el.style.setProperty('width', '100%', 'important');
-      el.style.setProperty('gap', '6px', 'important');
-    });
-    // 2. Force every column child to share space equally
-    document.querySelectorAll('[data-testid="stHorizontalBlock"] > [data-testid="stColumn"]').forEach(function(col) {
-      col.style.setProperty('flex', '1 1 0%', 'important');
-      col.style.setProperty('min-width', '0', 'important');
-      col.style.setProperty('width', 'auto', 'important');
-    });
-    // 3. Highlight active bottom nav button
-    var sentinel = document.querySelector('.bnav-sentinel');
-    if (sentinel) {
-      var activeIdx = parseInt(sentinel.getAttribute('data-active') || '0');
-      var wrap = document.querySelector('.bnav-wrap');
-      if (wrap) {
-        var cols = wrap.querySelectorAll('[data-testid="stColumn"]');
-        cols.forEach(function(col, i) {
-          var btn = col.querySelector('button');
-          if (!btn) return;
-          if (i === activeIdx) {
-            btn.style.setProperty('color', '#e24b4a', 'important');
-            btn.style.setProperty('border-top', '2px solid #e24b4a', 'important');
-          } else {
-            btn.style.setProperty('color', '#4b5563', 'important');
-            btn.style.setProperty('border-top', '2px solid transparent', 'important');
-          }
-        });
-      }
-    }
-  }
-
-  // Run immediately and after short delays to catch initial render
-  patchAll();
-  setTimeout(patchAll, 100);
-  setTimeout(patchAll, 300);
-  setTimeout(patchAll, 700);
-  setTimeout(patchAll, 1500);
-
-  // Watch for ANY DOM change and re-patch (handles Streamlit reruns)
-  var observer = new MutationObserver(function() { patchAll(); });
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['style']
-  });
-})();
-</script>
-"""
-
 # ── Mobile CSS ─────────────────────────────────────────────────────────────────
 MOBILE_CSS = BASE_CSS + """
 <style>
 .nav-sub { display: none !important; }
 
+/* ── Navbar ── */
 .navbar {
   background: #0d0f18;
   border-bottom: 1px solid #1a1d2e;
-  padding: 8px 12px 0 12px;
+  padding: 0 12px;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -101,27 +39,44 @@ MOBILE_CSS = BASE_CSS + """
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
-  margin-bottom: 6px;
+  height: 46px;
 }
-.model-btn-row {
-  background: #080a10;
-  border-bottom: 1px solid #1a1d2e;
-  padding: 4px 12px;
-  margin: 0 -12px;
+
+/* ── Model switcher: pure HTML flex row ── */
+.model-row {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 6px !important;
+  padding: 6px 0 8px 0;
 }
-.model-btn-row .stButton > button {
-  width: 100% !important;
-  padding: 7px 4px !important;
+.model-row a {
+  flex: 1 1 0% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 8px 4px !important;
+  border-radius: 8px !important;
   font-size: 13px !important;
   font-weight: 600 !important;
-  border-radius: 8px !important;
+  text-decoration: none !important;
+  border: 1px solid #1a1d2e !important;
+  background: #13151f !important;
+  color: #6b7280 !important;
   min-height: 36px !important;
   white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+.model-row a.active {
+  background: #e24b4a !important;
+  color: #fff !important;
+  border-color: #e24b4a !important;
+  box-shadow: 0 2px 8px rgba(226,75,74,0.3) !important;
 }
 
+/* ── Content ── */
 .wrap { padding: 12px 12px 80px 12px !important; }
 
+/* ── Page title ── */
 .mob-page-title {
   font-size: 10px;
   font-weight: 700;
@@ -133,7 +88,8 @@ MOBILE_CSS = BASE_CSS + """
   border-bottom: 1px solid #1a1d2e;
 }
 
-.bnav-wrap {
+/* ── Bottom nav: pure HTML flex row, fixed ── */
+.bnav {
   position: fixed !important;
   bottom: 0 !important;
   left: 0 !important;
@@ -141,21 +97,33 @@ MOBILE_CSS = BASE_CSS + """
   background: #0d0f18 !important;
   border-top: 1px solid #1a1d2e !important;
   z-index: 9999 !important;
+  display: flex !important;
+  flex-direction: row !important;
   padding: 0 0 env(safe-area-inset-bottom, 4px) 0 !important;
 }
-.bnav-wrap .stButton > button {
-  background: transparent !important;
-  border: none !important;
-  border-top: 2px solid transparent !important;
+.bnav a {
+  flex: 1 1 0% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 8px 2px 5px !important;
+  text-decoration: none !important;
   color: #4b5563 !important;
   font-size: 10px !important;
   font-weight: 500 !important;
-  padding: 6px 2px 4px !important;
-  width: 100% !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  min-height: 46px !important;
-  line-height: 1.4 !important;
+  border-top: 2px solid transparent !important;
+  gap: 2px !important;
+  min-height: 48px !important;
+  box-sizing: border-box !important;
+}
+.bnav a .bni {
+  font-size: 18px !important;
+  line-height: 1 !important;
+}
+.bnav a.active {
+  color: #e24b4a !important;
+  border-top: 2px solid #e24b4a !important;
 }
 
 /* Mobile font scaling */
@@ -167,14 +135,22 @@ MOBILE_CSS = BASE_CSS + """
 .bn        { width: 110px !important; }
 .status-pill { padding: 4px 10px !important; font-size: 10px !important; }
 </style>
-""" + _FLEX_FIX_JS
+"""
+
+
+def _qp_url(params: dict) -> str:
+    """Build a relative URL with query params that Streamlit will pick up."""
+    parts = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"?{parts}"
 
 
 def render_navbar(mk, both_ok):
     status_color = "#22c55e" if both_ok else "#f59e0b"
     status_text  = "Ready"  if both_ok else "Partial"
+    indian_cls   = "active" if mk == "indian" else ""
+    gtsrb_cls    = "active" if mk == "gtsrb"  else ""
+    tab          = st.session_state.get("tab", 0)
 
-    # Pure HTML top row — no Streamlit widgets inside
     st.markdown(f"""
 <div class="navbar">
   <div class="nav-top-row">
@@ -189,44 +165,45 @@ def render_navbar(mk, both_ok):
       </div>
     </div>
   </div>
+  <div class="model-row">
+    <a href="?mk=indian&tab={tab}" class="{indian_cls}">🇮🇳 Indian</a>
+    <a href="?mk=gtsrb&tab={tab}"  class="{gtsrb_cls}">🌍 GTSRB</a>
+  </div>
 </div>
-<div class="model-btn-row">
 """, unsafe_allow_html=True)
-
-    # Real st.columns for model buttons — JS will force these horizontal
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("🇮🇳 Indian", key="m_indian",
-                     type="primary" if mk == "indian" else "secondary"):
-            st.session_state.mk = "indian"; st.rerun()
-    with c2:
-        if st.button("🌍 GTSRB", key="m_gtsrb",
-                     type="primary" if mk == "gtsrb" else "secondary"):
-            st.session_state.mk = "gtsrb"; st.rerun()
-
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_model_strip(mk):
-    pass  # no-op — switcher is in render_navbar
+    pass  # no-op
 
 
 def render_bottom_nav(tab):
-    st.markdown(
-        f'<div class="bnav-sentinel" data-active="{tab}" style="height:0;overflow:hidden;"></div>',
-        unsafe_allow_html=True
-    )
-    st.markdown('<div class="bnav-wrap">', unsafe_allow_html=True)
-    cols = st.columns(4)
-    items = [("📤", "Upload", 0), ("📷", "Live", 1), ("📊", "Stats", 2), ("🕒", "History", 3)]
-    for col, (icon, name, idx) in zip(cols, items):
-        with col:
-            if st.button(f"{icon}\n{name}", key=f"bnav_{idx}", type="secondary"):
-                st.session_state.tab = idx; st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    mk = st.session_state.get("mk", "gtsrb")
+    items = [
+        (0, "📤", "Upload"),
+        (1, "📷", "Live"),
+        (2, "📊", "Stats"),
+        (3, "🕒", "History"),
+    ]
+    links = ""
+    for idx, icon, name in items:
+        cls = "active" if tab == idx else ""
+        links += f'<a href="?tab={idx}&mk={mk}" class="{cls}"><span class="bni">{icon}</span>{name}</a>\n'
+
+    st.markdown(f'<div class="bnav">{links}</div>', unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# In app.py, add this near the top BEFORE routing to mobile_ui:
+#
+#   _qp = st.query_params
+#   if "mk"  in _qp: st.session_state.mk  = _qp["mk"]
+#   if "tab" in _qp: st.session_state.tab = int(_qp["tab"])
+#
+# This lets the HTML <a href="?tab=1&mk=gtsrb"> links drive session state.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
 def render_upload_tab(model, mok, mk, mk_label, labels):
     st.markdown('<div class="wrap">', unsafe_allow_html=True)
     st.markdown(f'<div class="mob-page-title">📤 Upload · {mk_label}</div>', unsafe_allow_html=True)
@@ -373,7 +350,6 @@ def render_live_tab(model, mok, mk, mk_label, labels):
         sp = draw_sparkline(st.session_state.sparkline)
         if sp: st.image(sp, use_column_width=True)
     wh = st.session_state.webcam_history; n_det = len(wh)
-    avg_c = np.mean([h["conf"] for h in wh]) if wh else 0
     st.markdown(f'<div style="background:#0d0f18;border:1px solid #1a1d2e;border-radius:10px;padding:12px 14px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#4b5563;">Signs detected</span><span style="font-family:\'JetBrains Mono\',monospace;font-size:22px;font-weight:700;color:#22c55e;">{n_det}</span></div>', unsafe_allow_html=True)
     if st.button("🗑 Clear Webcam History", key="mob_cwh", type="secondary"):
         st.session_state.webcam_history=[]; st.session_state.live_result=None; st.session_state.sparkline=[]; st.rerun()
