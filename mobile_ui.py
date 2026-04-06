@@ -1,12 +1,9 @@
 """
 mobile_ui.py — Mobile layout for TrafficSense AI
-
-FIX: HF Spaces blocks inline <script> tags via CSP, so JS fixes don't run.
-st.columns() stacks vertically on HF Spaces mobile iframe.
-
-SOLUTION: Replace navbar model buttons AND bottom nav with pure HTML <a> links
-that set URL query params (?mk=indian, ?tab=1 etc). app.py reads these via
-st.query_params and updates session_state before rendering. No JS needed.
+- NO top tab row
+- Fixed bottom nav bar (4 buttons: Upload, Live, Stats, History)
+- Model switcher in a compact top strip
+- Single-column content for all tabs
 """
 import io as _io, datetime, time
 import numpy as np
@@ -21,189 +18,224 @@ from shared import (
     render_top3, draw_sparkline, draw_gauge, BASE_CSS
 )
 
-# ── Mobile CSS ─────────────────────────────────────────────────────────────────
+# ── Mobile-specific CSS ────────────────────────────────────────────────────────
 MOBILE_CSS = BASE_CSS + """
 <style>
-.nav-sub { display: none !important; }
+/* ── Mobile layout ─────────────────────────────────────────────── */
 
-/* ── Navbar ── */
+/* Compact navbar for mobile */
 .navbar {
+  height: auto !important;
+  flex-wrap: wrap !important;
+  padding: 8px 14px !important;
+  gap: 6px !important;
+}
+.nav-sub { display: none; }
+.status-pill { font-size: 10px !important; padding: 4px 10px !important; }
+
+/* Model switcher strip — top, full width, below navbar */
+.model-strip {
+  display: flex;
+  gap: 0;
   background: #0d0f18;
   border-bottom: 1px solid #1a1d2e;
-  padding: 0 12px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
 }
-.nav-top-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 46px;
-}
-
-/* ── Model switcher: pure HTML flex row ── */
-.model-row {
-  display: flex !important;
-  flex-direction: row !important;
-  gap: 6px !important;
-  padding: 6px 0 8px 0;
-}
-.model-row a {
-  flex: 1 1 0% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 8px 4px !important;
-  border-radius: 8px !important;
+.model-strip .stButton > button {
+  border-radius: 0 !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  background: transparent !important;
+  color: #4b5563 !important;
   font-size: 13px !important;
-  font-weight: 600 !important;
-  text-decoration: none !important;
-  border: 1px solid #1a1d2e !important;
-  background: #13151f !important;
-  color: #6b7280 !important;
-  min-height: 36px !important;
-  white-space: nowrap !important;
-  box-sizing: border-box !important;
+  padding: 10px 0 !important;
 }
-.model-row a.active {
-  background: #e24b4a !important;
-  color: #fff !important;
-  border-color: #e24b4a !important;
-  box-shadow: 0 2px 8px rgba(226,75,74,0.3) !important;
+.model-strip .stButton > button[kind="primary"] {
+  color: #e24b4a !important;
+  border-bottom: 2px solid #e24b4a !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
-/* ── Content ── */
-.wrap { padding: 12px 12px 80px 12px !important; }
+/* Content area — extra bottom padding so nav bar doesn't cover content */
+.wrap {
+  padding: 14px 12px 90px !important;
+}
 
-/* ── Page title ── */
+/* Page title */
 .mob-page-title {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: #374151;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  padding: 8px 0 6px;
+  padding: 10px 0 6px;
   margin-bottom: 8px;
   border-bottom: 1px solid #1a1d2e;
 }
 
-/* ── Bottom nav: pure HTML flex row, fixed ── */
-.bnav {
+/* Prediction card — tighter on mobile */
+.pred-name { font-size: 17px !important; }
+.conf-big  { font-size: 36px !important; }
+.live-conf { font-size: 44px !important; }
+.live-name { font-size: 17px !important; }
+.sv        { font-size: 22px !important; }
+.bn        { width: 110px !important; }
+
+/* ── Fixed bottom nav ──────────────────────────────────────────── */
+/* 
+  IMPORTANT: We cannot inject Streamlit buttons inside an arbitrary HTML div.
+  Instead we render a real st.columns(4) row of st.button() widgets, 
+  then use CSS to fix that specific row to the bottom of the viewport.
+  
+  We tag the container with a data attribute via JS injected in the page,
+  and use a robust CSS selector to grab it.
+  
+  Fallback: we use the nth-of-type of the last horizontal block rendered.
+  To make this reliable we render the bottom nav LAST on the page,
+  wrapped in a unique sentinel div.
+*/
+.bottom-nav-sentinel + div[data-testid="stVerticalBlock"],
+.bottom-nav-sentinel ~ div[data-testid="stVerticalBlock"] {
+  /* not used — see JS approach below */
+}
+
+/* The sentinel + columns trick: 
+   We render a zero-height sentinel div, then the 4-column nav row.
+   JS finds the sentinel, then fixes the next sibling columns block. */
+.bnav-row {
   position: fixed !important;
   bottom: 0 !important;
   left: 0 !important;
   right: 0 !important;
   background: #0d0f18 !important;
-  border-top: 1px solid #1a1d2e !important;
+  border-top: 2px solid #1a1d2e !important;
   z-index: 9999 !important;
+  padding: 4px 0 env(safe-area-inset-bottom, 8px) !important;
   display: flex !important;
-  flex-direction: row !important;
-  padding: 0 0 env(safe-area-inset-bottom, 4px) 0 !important;
 }
-.bnav a {
-  flex: 1 1 0% !important;
+.bnav-row [data-testid="column"] {
   display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
   justify-content: center !important;
-  padding: 8px 2px 5px !important;
-  text-decoration: none !important;
+}
+.bnav-row .stButton > button {
+  background: transparent !important;
+  border: none !important;
   color: #4b5563 !important;
   font-size: 10px !important;
   font-weight: 500 !important;
-  border-top: 2px solid transparent !important;
-  gap: 2px !important;
-  min-height: 48px !important;
-  box-sizing: border-box !important;
+  padding: 8px 4px !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 6px !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  line-height: 1.3 !important;
 }
-.bnav a .bni {
-  font-size: 18px !important;
-  line-height: 1 !important;
-}
-.bnav a.active {
-  color: #e24b4a !important;
-  border-top: 2px solid #e24b4a !important;
-}
+.bnav-row .stButton > button:hover { opacity: 1 !important; }
 
-/* Mobile font scaling */
-.pred-name { font-size: 16px !important; }
-.conf-big  { font-size: 34px !important; }
-.live-conf { font-size: 42px !important; }
-.live-name { font-size: 16px !important; }
-.sv        { font-size: 22px !important; }
-.bn        { width: 110px !important; }
-.status-pill { padding: 4px 10px !important; font-size: 10px !important; }
+/* Active tab nav button */
+.bnav-active .stButton > button {
+  color: #e24b4a !important;
+}
 </style>
+
+<script>
+// Fix the bottom nav row to the viewport bottom
+// We find the div containing our sentinel class and fix its next sibling
+(function fixBottomNav() {
+  function doFix() {
+    const sentinel = document.querySelector('.bnav-sentinel');
+    if (!sentinel) { setTimeout(doFix, 200); return; }
+    // Walk up to the stVerticalBlock, then find the next columns block
+    let el = sentinel;
+    while (el && el.getAttribute('data-testid') !== 'stVerticalBlock') {
+      el = el.parentElement;
+    }
+    if (!el) { setTimeout(doFix, 200); return; }
+    // The next sibling stHorizontalBlock is our nav row
+    let sib = el.nextElementSibling;
+    while (sib) {
+      if (sib.getAttribute('data-testid') === 'stHorizontalBlock') {
+        sib.classList.add('bnav-row');
+        return;
+      }
+      sib = sib.nextElementSibling;
+    }
+    setTimeout(doFix, 200);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', doFix);
+  } else {
+    doFix();
+  }
+})();
+</script>
 """
 
 
-def _qp_url(params: dict) -> str:
-    """Build a relative URL with query params that Streamlit will pick up."""
-    parts = "&".join(f"{k}={v}" for k, v in params.items())
-    return f"?{parts}"
-
-
 def render_navbar(mk, both_ok):
-    status_color = "#22c55e" if both_ok else "#f59e0b"
-    status_text  = "Ready"  if both_ok else "Partial"
-    indian_cls   = "active" if mk == "indian" else ""
-    gtsrb_cls    = "active" if mk == "gtsrb"  else ""
-    tab          = st.session_state.get("tab", 0)
-
+    """Compact mobile navbar — logo + buttons."""
     st.markdown(f"""
-<div class="navbar">
-  <div class="nav-top-row">
-    <div class="nav-logo">
-      <div class="nav-logo-icon">🚦</div>
-      <div><div class="nav-brand">TrafficSense<span>AI</span></div></div>
-    </div>
-    <div class="nav-right">
-      <div class="status-pill">
-        <div class="sdot" style="background:{status_color};"></div>
-        <span style="color:{status_color};">{status_text}</span>
-      </div>
+<div class="navbar" style="border-bottom:none; padding-bottom:0;">
+  <div class="nav-logo">
+    <div class="nav-logo-icon">🚦</div>
+    <div>
+      <div class="nav-brand">TrafficSense<span>AI</span></div>
     </div>
   </div>
-  <div class="model-row">
-    <a href="?mk=indian&tab={tab}" class="{indian_cls}">🇮🇳 Indian</a>
-    <a href="?mk=gtsrb&tab={tab}"  class="{gtsrb_cls}">🌍 GTSRB</a>
+  <div class="nav-right">
+    <div class="status-pill">
+      <div class="sdot"></div>{'Ready' if both_ok else 'Partial'}
+    </div>
   </div>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
+    st.markdown('<div class="model-strip">', unsafe_allow_html=True)
+    mc1, mc2, mc3 = st.columns([1, 1, 0.4])
+    with mc1:
+        if st.button("🇮🇳 Indian", key="m_indian",
+                     type="primary" if mk == "indian" else "secondary"):
+            st.session_state.mk = "indian"; st.rerun()
+    with mc2:
+        if st.button("🌍 GTSRB", key="m_gtsrb",
+                     type="primary" if mk == "gtsrb" else "secondary"):
+            st.session_state.mk = "gtsrb"; st.rerun()
+    with mc3:
+        if st.button("◐", key="m_contrast", type="secondary"):
+            st.session_state.is_dark = not st.session_state.get("is_dark", True)
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_model_strip(mk):
-    pass  # no-op
+    pass
 
 
 def render_bottom_nav(tab):
-    mk = st.session_state.get("mk", "gtsrb")
-    items = [
-        (0, "📤", "Upload"),
-        (1, "📷", "Live"),
-        (2, "📊", "Stats"),
-        (3, "🕒", "History"),
-    ]
-    links = ""
-    for idx, icon, name in items:
-        cls = "active" if tab == idx else ""
-        links += f'<a href="?tab={idx}&mk={mk}" class="{cls}"><span class="bni">{icon}</span>{name}</a>\n'
-
-    st.markdown(f'<div class="bnav">{links}</div>', unsafe_allow_html=True)
+    """
+    Fixed bottom nav with 4 real Streamlit buttons.
+    Rendered LAST on the page. JS + CSS fixes it to viewport bottom.
+    """
+    # Sentinel — JS finds this to locate the nav row
+    st.markdown('<div class="bnav-sentinel" style="height:0;overflow:hidden;"></div>',
+                unsafe_allow_html=True)
+    # 4 real st.button() columns — CSS/JS will fix this row to the bottom
+    items = [("📤", "Upload", 0), ("📷", "Live", 1), ("📊", "Stats", 2), ("🕒", "History", 3)]
+    cols  = st.columns(4)
+    for col, (icon, name, idx) in zip(cols, items):
+        # Wrap active tab in a div so CSS can target it
+        active = (tab == idx)
+        if active:
+            st.markdown(f'<style>.bnav-active-{idx} .stButton>button{{color:#e24b4a!important;}}</style>', unsafe_allow_html=True)
+        with col:
+            label = f"{icon} {name}"
+            if st.button(label, key=f"bnav_{idx}", type="secondary"):
+                st.session_state.tab = idx; st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# In app.py, add this near the top BEFORE routing to mobile_ui:
-#
-#   _qp = st.query_params
-#   if "mk"  in _qp: st.session_state.mk  = _qp["mk"]
-#   if "tab" in _qp: st.session_state.tab = int(_qp["tab"])
-#
-# This lets the HTML <a href="?tab=1&mk=gtsrb"> links drive session state.
-# ══════════════════════════════════════════════════════════════════════════════
-
-
 def render_upload_tab(model, mok, mk, mk_label, labels):
     st.markdown('<div class="wrap">', unsafe_allow_html=True)
     st.markdown(f'<div class="mob-page-title">📤 Upload · {mk_label}</div>', unsafe_allow_html=True)
@@ -256,6 +288,7 @@ def render_upload_tab(model, mok, mk, mk_label, labels):
                     })
                     st.session_state.upload_history = st.session_state.upload_history[:MAX_HISTORY]
         else:
+            # Batch: single column on mobile
             for i, f in enumerate(files):
                 raw = Image.open(f); proc, warns, _ = preprocess_image(raw)
                 st.image(proc, use_column_width=True, caption=f.name[:20])
@@ -279,6 +312,7 @@ def render_upload_tab(model, mok, mk, mk_label, labels):
                         })
             st.session_state.upload_history = st.session_state.upload_history[:MAX_HISTORY]
 
+    # Quick stats below upload on mobile
     n_up  = len(st.session_state.upload_history)
     avg_c = np.mean([h["conf"] for h in st.session_state.upload_history]) if st.session_state.upload_history else 0.0
     from shared import load_summary
@@ -299,7 +333,7 @@ def render_upload_tab(model, mok, mk, mk_label, labels):
 def render_live_tab(model, mok, mk, mk_label, labels):
     st.markdown('<div class="wrap">', unsafe_allow_html=True)
     st.markdown(f'<div class="mob-page-title">📷 Live · {mk_label}</div>', unsafe_allow_html=True)
-    st.markdown('<div style="background:#0d0f18;border:1px solid #1a1d2e;border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:11px;color:#4b5563;">🎯 Centre the sign · fill 60%+ of frame · hold steady 📱</div>', unsafe_allow_html=True)
+    st.markdown('<div style="background:#0d0f18;border:1px solid #1a1d2e;border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:11px;color:#4b5563;">🎯 Centre the sign · fill 60%+ of frame · hold steady for 2 seconds 📱</div>', unsafe_allow_html=True)
     cam = st.camera_input("Camera", label_visibility="collapsed", key=f"mob_cam_{mk}")
     ca1, ca2 = st.columns(2)
     with ca1: auto = st.checkbox("🔄 Auto-refresh", value=not st.session_state.freeze)
@@ -349,7 +383,9 @@ def render_live_tab(model, mok, mk, mk_label, labels):
         st.markdown('<div class="slabel">Confidence Trend</div>', unsafe_allow_html=True)
         sp = draw_sparkline(st.session_state.sparkline)
         if sp: st.image(sp, use_column_width=True)
+    # Session stats
     wh = st.session_state.webcam_history; n_det = len(wh)
+    avg_c = np.mean([h["conf"] for h in wh]) if wh else 0
     st.markdown(f'<div style="background:#0d0f18;border:1px solid #1a1d2e;border-radius:10px;padding:12px 14px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#4b5563;">Signs detected</span><span style="font-family:\'JetBrains Mono\',monospace;font-size:22px;font-weight:700;color:#22c55e;">{n_det}</span></div>', unsafe_allow_html=True)
     if st.button("🗑 Clear Webcam History", key="mob_cwh", type="secondary"):
         st.session_state.webcam_history=[]; st.session_state.live_result=None; st.session_state.sparkline=[]; st.rerun()
@@ -369,6 +405,7 @@ def render_stats_tab(mk):
     i_p1=i_s.get("phase1_best_val_acc",49.19); i_p2=i_s.get("phase2_best_val_acc",76.81)
     g_t1=g_s.get("final_val_acc",83.42); g_t3=g_s.get("final_top3_acc",97.09)
     g_p1=g_s.get("phase1_best_val_acc",39.53); g_p2=g_s.get("phase2_best_val_acc",83.42)
+    # Gauges side by side
     gc1, gc2 = st.columns(2)
     with gc1:
         g1 = draw_gauge(i_t1,"#93c5fd","🇮🇳 Indian")
@@ -376,6 +413,7 @@ def render_stats_tab(mk):
     with gc2:
         g2 = draw_gauge(g_t1,"#fca5a5","🌍 GTSRB")
         if g2: st.image(g2, use_column_width=True)
+    # Comparison table
     comp = [
         ("Top-1 Acc",f"{i_t1:.1f}%",f"{g_t1:.1f}%"),
         ("Top-3 Acc",f"{i_t3:.1f}%",f"{g_t3:.1f}%"),
@@ -385,6 +423,7 @@ def render_stats_tab(mk):
     ]
     rows_h = "".join(f'<tr><td class="met">{m}</td><td class="vv" style="color:#93c5fd;">{iv}</td><td class="vv" style="color:#fca5a5;">{gv}</td></tr>' for m,iv,gv in comp)
     st.markdown(f'<div class="card" style="margin-top:12px;"><div class="card-body"><table class="comptbl"><thead><tr><th>Metric</th><th style="text-align:center;">🇮🇳</th><th style="text-align:center;">🌍</th></tr></thead><tbody>{rows_h}</tbody></table></div></div>', unsafe_allow_html=True)
+    # Training curve (compact)
     ih1=i_s.get("training_history",{}).get("phase1",{}); ih2=i_s.get("training_history",{}).get("phase2",{})
     gh1=g_s.get("training_history",{}).get("phase1",{}); gh2=g_s.get("training_history",{}).get("phase2",{})
     i_val=ih1.get("val_acc",[])+ih2.get("val_acc",[]); g_val=gh1.get("val_acc",[])+gh2.get("val_acc",[])
@@ -418,6 +457,7 @@ def render_history_tab():
         icon  = DANGER_ICONS.get(top_info.get("danger","INFO"),"🟢")
         color = DANGER_COLORS.get(top_info.get("danger","INFO"),"#22c55e")
         st.markdown(f'<div class="most-det"><div class="most-det-icon">{icon}</div><div><div class="most-det-label">Most Detected</div><div class="most-det-name">{top_sign[:22]}</div></div><div class="most-det-count" style="color:{color};">{top_count}×</div></div>', unsafe_allow_html=True)
+    # Upload history
     st.markdown('<div class="slabel">📤 Upload History</div>', unsafe_allow_html=True)
     if uh:
         su = st.text_input("Filter signs…", key="mob_su", label_visibility="collapsed", placeholder="Filter by name…")
@@ -432,6 +472,7 @@ def render_history_tab():
     else:
         st.markdown('<div style="text-align:center;padding:20px;color:#374151;font-size:12px;">No upload history yet</div>', unsafe_allow_html=True)
     st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+    # Webcam history
     st.markdown('<div class="slabel">📷 Webcam History</div>', unsafe_allow_html=True)
     if wh:
         st.markdown('<div class="card"><div class="card-body"><table class="htbl"><thead><tr><th>Sign</th><th>Conf</th><th>Type</th></tr></thead><tbody>', unsafe_allow_html=True)
