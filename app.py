@@ -1,8 +1,7 @@
 """
 app.py — TrafficSense AI entry point
-Mobile Fix: UA detection is unreliable on HF Spaces (proxy strips headers).
-Solution: JS-based screen width detection sets ?layout=mobile via query param.
-Falls back to desktop if JS fails.
+Mobile Fix: Combines UA detection (instant) + JS screen width (sets param on next load).
+No st.stop(), no blank screens, no redirect loops.
 """
 import streamlit as st
 import streamlit.components.v1 as components
@@ -32,46 +31,15 @@ _qp = st.query_params
 if "mk"  in _qp: st.session_state.mk  = _qp["mk"]
 if "tab" in _qp: st.session_state.tab = int(_qp["tab"])
 
-# ── Step 1: If ?layout= is not set yet, inject JS to detect screen width ───────
-_layout_param = st.query_params.get("layout", None)
+# ── Step 1: Check ?layout= param first (most reliable, set by JS on prev load) ─
+_lp = st.query_params.get("layout", None)
 
-if _layout_param is None:
-    # Inject JS — this runs client-side and reloads the page with ?layout=mobile or desktop
-    components.html("""
-    <script>
-    (function() {
-        try {
-            var w = window.screen.width || window.innerWidth;
-            var layout = (w < 768) ? 'mobile' : 'desktop';
-
-            // Try to set on the parent window (works if same-origin)
-            try {
-                var url = new URL(window.parent.location.href);
-                url.searchParams.set('layout', layout);
-                window.parent.location.replace(url.toString());
-            } catch(e) {
-                // Cross-origin blocked — set on iframe's own location instead
-                // Streamlit reads query params from its own iframe URL on HF Spaces
-                var url2 = new URL(window.location.href);
-                url2.searchParams.set('layout', layout);
-                window.location.replace(url2.toString());
-            }
-        } catch(err) {
-            // JS fully failed — do nothing, Python fallback handles it below
-        }
-    })();
-    </script>
-    """, height=0)
-    st.stop()  # Pause rendering until the redirect completes and page reloads
-
-# ── Step 2: Read the ?layout= param set by JS (or manually in URL) ────────────
-_lp = st.query_params.get("layout", "desktop")
-
-# Allow manual override via URL for bookmarking:  ?layout=mobile or ?layout=desktop
-st.session_state.is_mobile = (_lp == "mobile")
-
-# ── Fallback: try UA detection if somehow layout param is missing ──────────────
-if _layout_param is None:
+if _lp == "mobile":
+    st.session_state.is_mobile = True
+elif _lp == "desktop":
+    st.session_state.is_mobile = False
+else:
+    # ?layout= not set yet — use UA detection as immediate fallback
     try:
         headers = st.context.headers
         ua = (headers.get("user-agent", "") or headers.get("User-Agent", "")).lower()
@@ -82,6 +50,31 @@ if _layout_param is None:
         st.session_state.is_mobile = is_mobile_ua or (sec_ch == "?1")
     except Exception:
         st.session_state.is_mobile = False
+
+# ── Step 2: Inject JS to set ?layout= for NEXT load (non-blocking) ────────────
+# Renders the page NOW; JS quietly fixes the param on next refresh
+if _lp is None:
+    components.html("""
+    <script>
+    (function() {
+        try {
+            var w = window.screen.width || window.innerWidth || 1024;
+            var layout = (w < 768) ? 'mobile' : 'desktop';
+            var target = null;
+            try { target = window.parent.location.href; } catch(e) {}
+            if (!target) { try { target = window.location.href; } catch(e) {} }
+            if (target) {
+                var url = new URL(target);
+                if (url.searchParams.get('layout') !== layout) {
+                    url.searchParams.set('layout', layout);
+                    try { window.parent.location.replace(url.toString()); }
+                    catch(e) { window.location.replace(url.toString()); }
+                }
+            }
+        } catch(err) {}
+    })();
+    </script>
+    """, height=0)
 
 # ── Load models (shared) ───────────────────────────────────────────────────────
 from shared import load_models, load_all_labels
