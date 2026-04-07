@@ -36,16 +36,23 @@ if "tab" in _qp: st.session_state.tab = int(_qp["tab"])
 
 # ── Device detection via User-Agent (server-side, no JS required) ──────────────
 def detect_mobile_from_ua() -> bool:
-    """Read User-Agent from request headers — works inside HF Spaces iframes."""
     try:
-        headers = st.context.headers          # Streamlit >= 1.31
+        headers = st.context.headers
         ua = headers.get("user-agent", "") or headers.get("User-Agent", "")
         ua_lower = ua.lower()
         mobile_keywords = ("mobile", "android", "iphone", "ipad", "ipod",
                            "blackberry", "windows phone", "opera mini")
-        return any(kw in ua_lower for kw in mobile_keywords)
+        
+        # Also check screen width hint if available
+        is_mobile_ua = any(kw in ua_lower for kw in mobile_keywords)
+        
+        # HF Spaces sometimes passes viewport hints in other headers
+        sec_ch_ua_mobile = headers.get("sec-ch-ua-mobile", "?0")
+        is_mobile_hint = sec_ch_ua_mobile == "?1"
+        
+        return is_mobile_ua or is_mobile_hint
     except Exception:
-        return False                          # safe fallback → desktop
+        return False
 
 if st.session_state.is_mobile is None:
     st.session_state.is_mobile = detect_mobile_from_ua()
