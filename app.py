@@ -1,13 +1,11 @@
 """
 app.py — TrafficSense AI entry point
-HF Spaces Fix: The previous JS approach failed because HF Spaces embeds
-Streamlit in a cross-origin iframe — window.parent is blocked by the browser,
-so the ?w= redirect never fired.
-
-Solution: Use st.context.headers to read the User-Agent server-side (no JS,
-no iframes, no redirects). Falls back gracefully → desktop layout.
+Mobile Fix: UA detection is unreliable on HF Spaces (proxy strips headers).
+Solution: JS-based screen width detection sets ?layout=mobile via query param.
+Falls back to desktop if JS fails.
 """
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="TrafficSense AI",
@@ -34,33 +32,56 @@ _qp = st.query_params
 if "mk"  in _qp: st.session_state.mk  = _qp["mk"]
 if "tab" in _qp: st.session_state.tab = int(_qp["tab"])
 
-# ── Device detection via User-Agent (server-side, no JS required) ──────────────
-def detect_mobile_from_ua() -> bool:
+# ── Step 1: If ?layout= is not set yet, inject JS to detect screen width ───────
+_layout_param = st.query_params.get("layout", None)
+
+if _layout_param is None:
+    # Inject JS — this runs client-side and reloads the page with ?layout=mobile or desktop
+    components.html("""
+    <script>
+    (function() {
+        try {
+            var w = window.screen.width || window.innerWidth;
+            var layout = (w < 768) ? 'mobile' : 'desktop';
+
+            // Try to set on the parent window (works if same-origin)
+            try {
+                var url = new URL(window.parent.location.href);
+                url.searchParams.set('layout', layout);
+                window.parent.location.replace(url.toString());
+            } catch(e) {
+                // Cross-origin blocked — set on iframe's own location instead
+                // Streamlit reads query params from its own iframe URL on HF Spaces
+                var url2 = new URL(window.location.href);
+                url2.searchParams.set('layout', layout);
+                window.location.replace(url2.toString());
+            }
+        } catch(err) {
+            // JS fully failed — do nothing, Python fallback handles it below
+        }
+    })();
+    </script>
+    """, height=0)
+    st.stop()  # Pause rendering until the redirect completes and page reloads
+
+# ── Step 2: Read the ?layout= param set by JS (or manually in URL) ────────────
+_lp = st.query_params.get("layout", "desktop")
+
+# Allow manual override via URL for bookmarking:  ?layout=mobile or ?layout=desktop
+st.session_state.is_mobile = (_lp == "mobile")
+
+# ── Fallback: try UA detection if somehow layout param is missing ──────────────
+if _layout_param is None:
     try:
         headers = st.context.headers
-        ua = headers.get("user-agent", "") or headers.get("User-Agent", "")
-        ua_lower = ua.lower()
-        mobile_keywords = ("mobile", "android", "iphone", "ipad", "ipod",
-                           "blackberry", "windows phone", "opera mini")
-        
-        # Also check screen width hint if available
-        is_mobile_ua = any(kw in ua_lower for kw in mobile_keywords)
-        
-        # HF Spaces sometimes passes viewport hints in other headers
-        sec_ch_ua_mobile = headers.get("sec-ch-ua-mobile", "?0")
-        is_mobile_hint = sec_ch_ua_mobile == "?1"
-        
-        return is_mobile_ua or is_mobile_hint
+        ua = (headers.get("user-agent", "") or headers.get("User-Agent", "")).lower()
+        mobile_kw = ("mobile", "android", "iphone", "ipad", "ipod",
+                     "blackberry", "windows phone", "opera mini")
+        is_mobile_ua = any(kw in ua for kw in mobile_kw)
+        sec_ch = headers.get("sec-ch-ua-mobile", "?0")
+        st.session_state.is_mobile = is_mobile_ua or (sec_ch == "?1")
     except Exception:
-        return False
-
-if st.session_state.is_mobile is None:
-    st.session_state.is_mobile = detect_mobile_from_ua()
-
-# Sidebar hidden by BASE_CSS. Force layout via ?layout=mobile or ?layout=desktop
-_lp = st.query_params.get("layout", None)
-if _lp == "mobile":   st.session_state.is_mobile = True
-elif _lp == "desktop": st.session_state.is_mobile = False
+        st.session_state.is_mobile = False
 
 # ── Load models (shared) ───────────────────────────────────────────────────────
 from shared import load_models, load_all_labels
@@ -83,7 +104,6 @@ if st.session_state.is_mobile:
     import mobile_ui as ui
     st.markdown(ui.MOBILE_CSS, unsafe_allow_html=True)
     ui.render_navbar(mk, both_ok)
-    # model strip removed — switcher is now inside render_navbar
     mk         = st.session_state.mk
     model, mok = models_dict[mk]
     labels     = all_labels[mk]
