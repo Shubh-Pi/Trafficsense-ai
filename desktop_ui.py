@@ -25,6 +25,8 @@ DESKTOP_CSS = BASE_CSS + """
   background: #080a10;
   border-bottom: 1px solid #1a1d2e;
 }
+/* Status pill lives inside .navbar on the right */
+.nav-right { margin-left: auto; display: flex; align-items: center; }
 /* Ensure no leftover mobile chrome */
 .mobile-only { display: none !important; }
 </style>
@@ -166,12 +168,16 @@ div[data-testid="stDownloadButton"] > button {
   border-color: #d1d5db !important;
 }
 /* Model info section sidebar */
+.nav-right { margin-left: auto; display: flex; align-items: center; }
 .mobile-only { display: none !important; }
 </style>
 """
 
 def render_navbar(mk, both_ok):
-    # Logo + branding on the left via markdown
+    status_color = "#22c55e" if both_ok else "#f59e0b"
+    status_text  = "Both Models Ready" if both_ok else "Partial Load"
+
+    # Brand (left) + status pill (right) — pure HTML, no Streamlit row gap
     st.markdown(f"""
 <div class="navbar">
   <div class="nav-logo">
@@ -181,10 +187,13 @@ def render_navbar(mk, both_ok):
       <div class="nav-sub">Sign Recognition · ADAS · EfficientNet-B3</div>
     </div>
   </div>
+  <div class="nav-right">
+    <div class="status-pill"><div class="sdot" style="background:{status_color};"></div>{status_text}</div>
+  </div>
 </div>""", unsafe_allow_html=True)
 
-    # Real Streamlit buttons for model switching (right-aligned via columns)
-    _, nr1, nr2, nr3 = st.columns([6, 1.2, 1.2, 1.6])
+    # Model-switch buttons sit immediately below navbar, flush right
+    _, nr1, nr2, nt = st.columns([6, 1.2, 1.2, 0.1])
     with nr1:
         if st.button("🇮🇳 Indian", key="nav_indian",
                      type="primary" if mk == "indian" else "secondary"):
@@ -193,19 +202,22 @@ def render_navbar(mk, both_ok):
         if st.button("🌍 GTSRB", key="nav_gtsrb",
                      type="primary" if mk == "gtsrb" else "secondary"):
             st.session_state.mk = "gtsrb"; st.rerun()
-    with nr3:
-        status_color = "#22c55e" if both_ok else "#f59e0b"
-        status_text  = "Both Models Ready" if both_ok else "Partial Load"
-        st.markdown(f'<div class="status-pill" style="margin-top:6px;"><div class="sdot" style="background:{status_color};"></div>{status_text}</div>',
-                    unsafe_allow_html=True)
 
 def render_tab_row(mk, tab):
-    """Desktop: 4 tab buttons + dark/light toggle in one horizontal row."""
-    # Ensure theme state exists
+    """Desktop: model switcher + 4 tab buttons + dark/light toggle — all one row."""
     if "is_dark" not in st.session_state:
         st.session_state.is_dark = True
 
-    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 0.3])
+    # columns: [Indian] [GTSRB] spacer [Upload] [Live] [Stats] [History] [🌙]
+    ci, cg, sp, c1, c2, c3, c4, c5 = st.columns([1.1, 1.1, 0.3, 1, 1, 1, 1, 0.3])
+    with ci:
+        if st.button("🇮🇳 Indian", key="nav_indian",
+                     type="primary" if mk == "indian" else "secondary"):
+            st.session_state.mk = "indian"; st.rerun()
+    with cg:
+        if st.button("🌍 GTSRB", key="nav_gtsrb",
+                     type="primary" if mk == "gtsrb" else "secondary"):
+            st.session_state.mk = "gtsrb"; st.rerun()
     with c1:
         if st.button("📤 Upload", key="d_upload",
                      type="primary" if tab == 0 else "secondary"):
