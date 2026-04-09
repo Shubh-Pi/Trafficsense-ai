@@ -25,7 +25,7 @@ IMG_SIZE = 224
 DEVICE = torch.device("cpu")
 MEAN = [0.485, 0.456, 0.406]
 STD  = [0.229, 0.224, 0.225]
-NO_SIGN_THRESHOLD = 0.30
+NO_SIGN_THRESHOLD = 0.25
 LOW_CONF  = 0.60
 HIGH_CONF = 0.95
 MAX_HISTORY = 200
@@ -173,7 +173,7 @@ def preprocess_image(img_pil):
         changed = True
     elif brightness > 210:
         warns.append(("☀️", "Overexposed image — applying gamma correction."))
-        arr = np.clip(np.power(arr/255.0, 1.8)*255.0, 0, 255); changed = True
+        arr = np.clip(np.power(arr/255.0, 1.4)*255.0, 0, 255); changed = True
     if HAS_CV2:
         arr_u8 = arr.astype(np.uint8)
         arr_u8 = cv2.bilateralFilter(arr_u8, d=9, sigmaColor=75, sigmaSpace=75)
@@ -196,6 +196,14 @@ def preprocess_image(img_pil):
     W, H = img_final.size; side = min(W, H)
     img_final = img_final.crop(((W-side)//2, (H-side)//2, (W-side)//2+side, (H-side)//2+side))
     img_final = img_final.resize((IMG_SIZE, IMG_SIZE), Image.LANCZOS)
+    # Always ensure solid RGB output (no transparency channel that causes checkerboard display)
+    if img_final.mode != "RGB":
+        bg = Image.new("RGB", img_final.size, (255, 255, 255))
+        if img_final.mode in ("RGBA", "LA"):
+            bg.paste(img_final.convert("RGB"), mask=img_final.split()[-1])
+        else:
+            bg.paste(img_final.convert("RGB"))
+        img_final = bg
     return img_final, warns, changed
 
 val_transform = transforms.Compose([
