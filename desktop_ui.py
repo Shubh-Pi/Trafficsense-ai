@@ -18,14 +18,30 @@ from shared import (
 DESKTOP_CSS = BASE_CSS + """
 <style>
 /* ── Desktop-specific ─────────────────────────────────────────── */
-/* Nav centre: model switcher + tab row side-by-side */
-.nav-center { display: flex; align-items: center; gap: 12px; }
-.tab-sw { display: flex; background: #13151f; border: 1px solid #1a1d2e; border-radius: 9px; padding: 3px; gap: 2px; }
-.tab-btn { padding: 5px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; color: #4b5563; background: transparent; font-family: 'Inter', sans-serif; }
-.tab-btn.active { background: #e24b4a; color: #fff; box-shadow: 0 2px 8px rgba(226,75,74,0.3); }
-.tab-btn:hover:not(.active) { color: #f0f0f0; }
-.theme-btn { background: #13151f; border: 1px solid #1a1d2e; border-radius: 8px; padding: 6px 10px; font-size: 15px; cursor: pointer; transition: background 0.15s; }
-.theme-btn:hover { background: #1a1d2e; }
+/* Button row pulled up to sit inside the navbar */
+.nav-btn-row {
+  position: relative;
+  z-index: 200;
+  margin-top: -52px;      /* pull up into the 58px navbar */
+  padding: 0 8px 0 220px; /* left-pad to clear the brand logo */
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+}
+/* Make Streamlit's block container inside .nav-btn-row transparent */
+.nav-btn-row > div[data-testid="stHorizontalBlock"] {
+  width: 100%;
+  background: transparent !important;
+}
+/* Remove default Streamlit top padding that would shift rows down */
+.nav-btn-row .block-container { padding-top: 0 !important; }
+/* Compact the buttons so they fit in 58px navbar height */
+.nav-btn-row .stButton > button {
+  padding: 6px 14px !important;
+  font-size: 12px !important;
+  height: 34px !important;
+  line-height: 1 !important;
+}
 .nav-right { display: flex; align-items: center; gap: 10px; }
 /* Ensure no leftover mobile chrome */
 .mobile-only { display: none !important; }
@@ -168,17 +184,12 @@ div[data-testid="stDownloadButton"] > button {
   border-color: #d1d5db !important;
 }
 /* Model info section sidebar */
-.nav-right { margin-left: auto; display: flex; align-items: center; }
+.nav-right { display: flex; align-items: center; gap: 10px; }
 .mobile-only { display: none !important; }
 </style>
 """
 
 def render_navbar(mk, both_ok):
-    """
-    Fully pure-HTML navbar — brand, model switcher, tab row, theme toggle,
-    and status pill all in ONE html block. Zero st.button calls = zero layout gaps.
-    Clicks set query params via JS; app.py reads them on the next rerun.
-    """
     if "is_dark" not in st.session_state:
         st.session_state.is_dark = True
 
@@ -186,11 +197,11 @@ def render_navbar(mk, both_ok):
     status_text  = "Both Models Ready" if both_ok else "Partial Load"
     tab          = st.session_state.get("tab", 0)
     theme_icon   = "🌙" if st.session_state.is_dark else "☀️"
-    theme_next   = "dark" if st.session_state.is_dark else "light"
 
-    def mk_cls(key):  return "model-btn active" if mk == key  else "model-btn"
-    def tab_cls(i):   return "tab-btn active"   if tab == i   else "tab-btn"
+    def mk_cls(key): return "model-btn active" if mk == key else "model-btn"
+    def tab_cls(i):  return "tab-btn active"   if tab == i  else "tab-btn"
 
+    # ── Pure HTML navbar (visual only) ────────────────────────────────────────
     st.markdown(f"""
 <div class="navbar">
   <div class="nav-logo">
@@ -200,44 +211,52 @@ def render_navbar(mk, both_ok):
       <div class="nav-sub">Sign Recognition · ADAS · EfficientNet-B3</div>
     </div>
   </div>
-
-  <div class="nav-center">
-    <div class="model-sw">
-      <button class="{mk_cls('indian')}" onclick="setQP('mk','indian')">🇮🇳 Indian</button>
-      <button class="{mk_cls('gtsrb')}"  onclick="setQP('mk','gtsrb')">🌍 GTSRB</button>
-    </div>
-    <div class="tab-sw">
-      <button class="{tab_cls(0)}" onclick="setQP('tab','0')">📤 Upload</button>
-      <button class="{tab_cls(1)}" onclick="setQP('tab','1')">📷 Live</button>
-      <button class="{tab_cls(2)}" onclick="setQP('tab','2')">📊 Stats</button>
-      <button class="{tab_cls(3)}" onclick="setQP('tab','3')">🕒 History</button>
-    </div>
-  </div>
-
+  <div class="nav-center" id="nav-center-placeholder"></div>
   <div class="nav-right">
     <div class="status-pill">
       <div class="sdot" style="background:{status_color};"></div>{status_text}
     </div>
-    <button class="theme-btn" onclick="setQP('theme','{theme_next}')" title="Toggle theme">{theme_icon}</button>
   </div>
-</div>
+</div>""", unsafe_allow_html=True)
 
-<script>
-function setQP(k, v) {{
-  try {{
-    var href = window.parent ? window.parent.location.href : window.location.href;
-    var u = new URL(href);
-    u.searchParams.set(k, v);
-    try {{ window.parent.location.replace(u.toString()); }}
-    catch(e) {{ window.location.replace(u.toString()); }}
-  }} catch(e) {{}}
-}}
-</script>
-""", unsafe_allow_html=True)
+    # ── Real st.button row — pulled up over the navbar via CSS ────────────────
+    # CSS class .nav-btn-row uses margin-top:-58px + position:relative + z-index
+    st.markdown('<div class="nav-btn-row">', unsafe_allow_html=True)
+    c1, c2, _sep, c3, c4, c5, c6, c7 = st.columns([1.1, 1.1, 0.25, 1, 1, 1, 1, 0.35])
+    with c1:
+        if st.button("🇮🇳 Indian", key="nav_indian",
+                     type="primary" if mk == "indian" else "secondary"):
+            st.session_state.mk = "indian"; st.rerun()
+    with c2:
+        if st.button("🌍 GTSRB", key="nav_gtsrb",
+                     type="primary" if mk == "gtsrb" else "secondary"):
+            st.session_state.mk = "gtsrb"; st.rerun()
+    with c3:
+        if st.button("📤 Upload", key="d_upload",
+                     type="primary" if tab == 0 else "secondary"):
+            st.session_state.tab = 0; st.rerun()
+    with c4:
+        if st.button("📷 Live", key="d_live",
+                     type="primary" if tab == 1 else "secondary"):
+            st.session_state.tab = 1; st.rerun()
+    with c5:
+        if st.button("📊 Stats", key="d_stats",
+                     type="primary" if tab == 2 else "secondary"):
+            st.session_state.tab = 2; st.rerun()
+    with c6:
+        if st.button("🕒 History", key="d_history",
+                     type="primary" if tab == 3 else "secondary"):
+            st.session_state.tab = 3; st.rerun()
+    with c7:
+        if st.button(theme_icon, key="d_theme", type="secondary",
+                     help="Toggle light / dark mode"):
+            st.session_state.is_dark = not st.session_state.is_dark
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_tab_row(mk, tab):
-    """No-op: navbar now owns the entire tab + model-switch row."""
+    """No-op: navbar owns everything now."""
     pass
 
 
