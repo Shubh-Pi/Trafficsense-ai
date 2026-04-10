@@ -192,17 +192,6 @@ def render_navbar(mk, both_ok):
   </div>
 </div>""", unsafe_allow_html=True)
 
-    # Model-switch buttons sit immediately below navbar, flush right
-    _, nr1, nr2, nt = st.columns([6, 1.2, 1.2, 0.1])
-    with nr1:
-        if st.button("🇮🇳 Indian", key="nav_indian",
-                     type="primary" if mk == "indian" else "secondary"):
-            st.session_state.mk = "indian"; st.rerun()
-    with nr2:
-        if st.button("🌍 GTSRB", key="nav_gtsrb",
-                     type="primary" if mk == "gtsrb" else "secondary"):
-            st.session_state.mk = "gtsrb"; st.rerun()
-
 def render_tab_row(mk, tab):
     """Desktop: model switcher + 4 tab buttons + dark/light toggle — all one row."""
     if "is_dark" not in st.session_state:
