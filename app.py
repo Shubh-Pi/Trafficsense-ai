@@ -28,8 +28,11 @@ for k, v in [
         st.session_state[k] = v
 
 _qp = st.query_params
-if "mk"  in _qp: st.session_state.mk  = _qp["mk"]
-if "tab" in _qp: st.session_state.tab = int(_qp["tab"])
+if "mk"    in _qp: st.session_state.mk       = _qp["mk"]
+if "tab"   in _qp: st.session_state.tab      = int(_qp["tab"])
+if "theme" in _qp:
+    st.session_state.is_dark = (_qp["theme"] == "dark")
+    st.query_params.pop("theme")  # consume it so it doesn't linger
 
 # ── Step 1: Check ?layout= param first (most reliable, set by JS on prev load) ─
 _lp = st.query_params.get("layout", None)
