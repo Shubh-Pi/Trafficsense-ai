@@ -20,14 +20,18 @@ cd Trafficsense-ai
 python -m venv .venv
 ```
 
-Activate the virtual environment, then install dependencies and start the app:
+Activate the virtual environment:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+On macOS or Linux, use `source .venv/bin/activate`. Then install dependencies and start the app:
 
 ```bash
 python -m pip install -r requirements.txt
 streamlit run app.py
 ```
-
-On Windows, activate with `.venv\Scripts\activate`. On macOS or Linux, use `source .venv/bin/activate`.
 
 ## Project files
 
